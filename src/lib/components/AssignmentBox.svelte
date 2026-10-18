@@ -701,8 +701,14 @@
 	}
 
 	@media (max-width: 760px) {
-		.layout.with-images {
+		.layout.with-images,
+		.editing .layout.with-images {
 			grid-template-columns: 1fr;
+		}
+
+		.editing .media {
+			max-height: none;
+			padding: 0;
 		}
 
 		.media {
@@ -720,6 +726,54 @@
 
 		.media.multi .thumb {
 			width: auto;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.assignment,
+		.assignment.editing {
+			padding: 14px 14px 16px;
+			border-left-width: 4px;
+		}
+
+		header {
+			flex-wrap: wrap;
+		}
+
+		h2 {
+			font-size: 1.35rem;
+		}
+
+		.content {
+			font-size: 1.05rem;
+		}
+
+		.thumb {
+			width: 110px;
+		}
+
+		.media.multi {
+			grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+		}
+
+		/* Auf dem Smartphone scrollt die Seite – der Editor braucht keine feste Höhe. */
+		.editable {
+			height: auto;
+			min-height: 220px;
+		}
+
+		.lightbox {
+			padding: 8px;
+		}
+
+		.lightbox img {
+			max-width: 100%;
+			max-height: 85vh;
+		}
+
+		.lightbox-close {
+			top: 10px;
+			right: 10px;
 		}
 	}
 </style>

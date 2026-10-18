@@ -16,9 +16,9 @@
 	const hours = $derived(now ? (now.getHours() % 12) + minutes / 60 : 0);
 </script>
 
-<div class="clock">
+<!-- Größe als Variable: Eltern können sie per --clock-size (z. B. für Smartphones) überschreiben. -->
+<div class="clock" style:--clock-default={size}>
 	<svg
-		style:width={size}
 		viewBox="0 0 200 200"
 		role="img"
 		aria-label={now ? `Uhrzeit ${pad(now.getHours())}:${pad(now.getMinutes())}` : 'Uhrzeit'}
@@ -63,6 +63,7 @@
 	}
 
 	svg {
+		width: var(--clock-size, var(--clock-default));
 		height: auto;
 		filter: drop-shadow(0 4px 10px rgb(20 30 60 / 12%));
 	}

@@ -28,7 +28,7 @@
 		{/each}
 		{#if !noise.active && !remote}
 			<button class="start" onclick={startNoise} title="Mikrofon für die Lautstärke-Ampel einschalten">
-				🎤 Ampel starten
+				🎤<span class="start-text"> Ampel starten</span>
 			</button>
 		{/if}
 	</div>
@@ -81,17 +81,17 @@
 
 	.lamp.red.on {
 		background: #ff3b3b;
-		box-shadow: 0 0 24px 6px rgb(255 59 59 / 65%);
+		box-shadow: 0 0 var(--glow, 24px) var(--glow-spread, 6px) rgb(255 59 59 / 65%);
 	}
 
 	.lamp.yellow.on {
 		background: #ffc531;
-		box-shadow: 0 0 24px 6px rgb(255 197 49 / 60%);
+		box-shadow: 0 0 var(--glow, 24px) var(--glow-spread, 6px) rgb(255 197 49 / 60%);
 	}
 
 	.lamp.green.on {
 		background: #2fdc76;
-		box-shadow: 0 0 24px 6px rgb(47 220 118 / 55%);
+		box-shadow: 0 0 var(--glow, 24px) var(--glow-spread, 6px) rgb(47 220 118 / 55%);
 	}
 
 	.inactive .lamp {

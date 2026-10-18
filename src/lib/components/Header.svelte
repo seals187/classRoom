@@ -270,14 +270,165 @@
 		font-weight: 600;
 	}
 
+	/* Auf Touch-Geräten gibt es kein Darüberfahren – Zahnrad dort immer zeigen. */
+	@media (hover: none) {
+		.gear.autohide:not(.open) {
+			opacity: 1;
+		}
+	}
+
+	/* Tablet: Balken unter Logo und Uhr, Uhr und Ampel etwas kleiner. */
 	@media (max-width: 900px) {
 		.topbar {
 			grid-template-columns: auto 1fr;
+			gap: 16px;
+			padding: 16px 16px 20px;
 		}
 
 		.center {
 			grid-column: 1 / -1;
 			grid-row: 2;
+			min-width: 0;
+		}
+
+		/* Auf der kleineren Ampel nur das Mikrofon-Symbol als Start-Knopf. */
+		.right :global(.start) {
+			padding: 4px 6px;
+		}
+
+		.right :global(.start-text) {
+			display: none;
+		}
+
+		.right {
+			--clock-size: clamp(120px, 20vw, 170px);
+			gap: 14px;
+			padding: 10px 14px;
+		}
+
+		.right :global(.lamp) {
+			width: clamp(24px, 3.6vw, 36px);
+		}
+
+		.right :global(.date .value) {
+			font-size: 1.3rem;
+		}
+
+		.right :global(.weekday) {
+			font-size: 0.95rem;
+		}
+
+		/* Schüler-Navigation nebeneinander statt untereinander. */
+		.me {
+			flex-direction: row;
+			flex-wrap: wrap;
+			align-items: center;
+		}
+
+		.me nav {
+			flex-direction: row;
+			flex-wrap: wrap;
+			align-self: auto;
+		}
+	}
+
+	/* Smartphone: eine schmale Zeile mit Logo und kleiner Uhr, darunter Navigation und Balken. */
+	@media (max-width: 640px) {
+		.topbar {
+			grid-template-columns: 1fr auto;
+			align-items: center;
+			gap: 10px;
+			padding: 10px 12px 14px;
+		}
+
+		.left {
+			display: contents;
+		}
+
+		.brandbar {
+			grid-column: 1;
+			grid-row: 1;
+			justify-self: start;
+			gap: 4px;
+			padding: 4px 12px 4px 4px;
+			border-radius: 14px;
+		}
+
+		.gear {
+			width: 40px;
+			height: 40px;
+		}
+
+		.brand {
+			gap: 8px;
+		}
+
+		.brand img {
+			width: 30px;
+			height: 30px;
+			border-radius: 8px;
+		}
+
+		.wordmark {
+			font-size: 1.15rem;
+		}
+
+		.right {
+			grid-column: 2;
+			grid-row: 1;
+			--clock-size: 64px;
+			gap: 8px;
+			padding: 6px 10px;
+			border-radius: 14px;
+		}
+
+		.right :global(.clock) {
+			gap: 2px;
+		}
+
+		.right :global(.weekday) {
+			display: none;
+		}
+
+		.right :global(.date .value) {
+			font-size: 0.78rem;
+		}
+
+		.right :global(.ampel) {
+			gap: 3px;
+			padding: 4px;
+		}
+
+		.right :global(.lamp) {
+			width: 14px;
+		}
+
+		.right :global(.lamp) {
+			--glow: 8px;
+			--glow-spread: 1px;
+		}
+
+		.divider.tall {
+			margin: 2px 0;
+		}
+
+		.me {
+			grid-column: 1 / -1;
+			grid-row: 2;
+			gap: 6px 10px;
+			padding: 8px 10px;
+		}
+
+		.name {
+			font-size: 1rem;
+		}
+
+		.me nav a {
+			padding: 6px 8px;
+		}
+
+		.center {
+			grid-row: 3;
 		}
 	}
 </style>

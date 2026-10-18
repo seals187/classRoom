@@ -126,4 +126,29 @@
 		color: var(--danger);
 		font-weight: 700;
 	}
+
+	@media (max-width: 640px) {
+		.bars {
+			gap: 8px;
+		}
+
+		.bar,
+		.content {
+			min-height: 46px;
+		}
+
+		.content {
+			gap: 2px 8px;
+			padding: 6px 12px;
+			font-size: 1rem;
+		}
+
+		.value {
+			font-size: 1.2rem;
+		}
+
+		.sub {
+			font-size: 0.85rem;
+		}
+	}
 </style>

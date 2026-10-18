@@ -77,8 +77,36 @@ body {
 	background: var(--bg);
 }
 
+:root {
+	/* Seitenrand – auf kleinen Bildschirmen schmaler (siehe unten). */
+	--gutter: 24px;
+}
+
 main {
-	padding: 0 24px 32px;
+	padding: 0 var(--gutter) 32px;
+}
+
+@media (max-width: 640px) {
+	:root {
+		--gutter: 12px;
+	}
+
+	main {
+		padding-bottom: 20px;
+	}
+
+	.page-head {
+		flex-wrap: wrap;
+		margin-bottom: 14px;
+	}
+
+	.page-head h1 {
+		font-size: 1.3rem;
+	}
+
+	.card {
+		padding: 14px;
+	}
 }
 
 h1,

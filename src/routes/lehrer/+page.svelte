@@ -184,9 +184,18 @@
 	}
 
 	@media (max-width: 600px) {
-		.add,
-		li {
+		.add {
 			grid-template-columns: 1fr;
+		}
+
+		/* Name und Löschen-Knopf oben, Passwortfeld darunter über die ganze Breite. */
+		li {
+			grid-template-columns: 1fr auto;
+		}
+
+		li form {
+			grid-column: 1 / -1;
+			grid-row: 2;
 		}
 	}
 </style>

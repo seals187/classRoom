@@ -185,7 +185,7 @@
 		align-items: center;
 		gap: 3vh;
 		padding: 16px 4vw 4vh;
-		margin: 0 -24px -32px;
+		margin: 0 calc(-1 * var(--gutter)) -32px;
 		background: var(--bg);
 	}
 
@@ -375,5 +375,38 @@
 	.error {
 		margin: 0;
 		color: var(--danger);
+	}
+
+	/* Smartphone: Beschriftung über der Zeit statt daneben. */
+	@media (max-width: 640px) {
+		.test {
+			margin-bottom: -20px;
+			padding: 12px var(--gutter) 24px;
+		}
+
+		.content {
+			flex-direction: column;
+			align-items: flex-start;
+			justify-content: center;
+			gap: 4px;
+			padding: 12px 16px;
+		}
+
+		.word {
+			min-width: 0;
+		}
+
+		.bar {
+			border-radius: 16px;
+		}
+
+		.presets button {
+			padding: 12px 8px;
+			font-size: 1.05rem;
+		}
+
+		.row {
+			flex-wrap: wrap;
+		}
 	}
 </style>

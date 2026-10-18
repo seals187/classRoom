@@ -66,4 +66,18 @@
 		font-size: 0.8rem;
 		text-align: right;
 	}
+
+	/* Unter dem Titel umgebrochen: linksbündig statt rechts. */
+	@media (max-width: 640px) {
+		.new-lesson {
+			flex-direction: row;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: 6px 10px;
+		}
+
+		.new-lesson small {
+			text-align: left;
+		}
+	}
 </style>

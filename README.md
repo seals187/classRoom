@@ -63,6 +63,7 @@ Ein Werkzeugkasten für Lehrerinnen und Lehrer: verschiedene kleine Tools, die s
   - *Lehrkräfte* sehen alles inkl. Menü
   - *Schüler* sehen Auftrag, Stundenziele und Selbstlern-Modus (ohne Menü)
 - **Hell- und Dunkelmodus**, pro Gerät umschaltbar
+- **Für Smartphone und Tablet angepasst** – kompakte Kopfzeile, einspaltige Listen, touchfreundlich
 - Menüpunkte mit Symbolen, die auch auf den jeweiligen Seiten erscheinen
 
 ### Zugänge
@@ -90,7 +91,7 @@ cp .env.example .env
 
 | Variable | Bedeutung | Standard |
 |---|---|---|
-| `CLASSROOM_VERSION` | Version des Docker-Images, z. B. `0.2.1` | `latest` |
+| `CLASSROOM_VERSION` | Version des Docker-Images, z. B. `0.2.2` | `latest` |
 | `PORT` | Port der App | `3000` |
 | `DATABASE_PATH` | Pfad der SQLite-Datei (nur lokal; im Container fest `/app/data`) | `data/classroom.db` |
 | `TEACHER_USERNAME` | Benutzername des Lehrerkontos aus der `.env` | `lehrer` |
@@ -118,7 +119,7 @@ Fertige Images (amd64 und arm64) gibt es unter `ghcr.io/seals187/classroom`. Auf
 ```bash
 mkdir -p /opt/classRoom && cd /opt/classRoom
 # docker-compose.yml und .env.example aus dem Repo hierher kopieren
-cp .env.example .env   # TEACHER_PASSWORD setzen, optional CLASSROOM_VERSION=0.2.1
+cp .env.example .env   # TEACHER_PASSWORD setzen, optional CLASSROOM_VERSION=0.2.2
 docker compose pull && docker compose up -d
 ```
 
@@ -154,5 +155,5 @@ npm run build && npm start   # Produktionsbuild
 
 ## Releases & Updates
 
-- **Release erstellen:** Version in `package.json` anheben, committen und einen Tag pushen, z. B. `git tag v0.2.1 && git push origin v0.2.1`. GitHub Actions baut dann das Docker-Image, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release an.
+- **Release erstellen:** Version in `package.json` anheben, committen und einen Tag pushen, z. B. `git tag v0.2.2 && git push origin v0.2.2`. GitHub Actions baut dann das Docker-Image, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release an.
 - **Abhängigkeiten:** Dependabot prüft wöchentlich npm-Pakete, das Docker-Basis-Image und die GitHub Actions und öffnet bei Updates Pull Requests.

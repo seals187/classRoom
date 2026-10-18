@@ -52,4 +52,17 @@
 	.goals-button:hover {
 		transform: translateY(-2px);
 	}
+
+	@media (max-width: 640px) {
+		.home {
+			gap: 14px;
+		}
+
+		.goals-button {
+			align-self: stretch;
+			justify-content: center;
+			padding: 14px 24px;
+			font-size: 1.2rem;
+		}
+	}
 </style>

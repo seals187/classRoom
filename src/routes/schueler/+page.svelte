@@ -115,6 +115,7 @@
 	{#each [stats.lesson, stats.self] as count, i (i)}
 		<span
 			class="count"
+			data-label={i === 0 ? 'Std.' : 'Selbst'}
 			class:complete={count.total > 0 && count.done === count.total}
 			title="{i === 0 ? 'Stundenziele' : 'Selbstlern-Ziele'}: {count.done} von {count.total} erledigt"
 		>
@@ -475,13 +476,73 @@
 	}
 
 	@media (max-width: 760px) {
-		.add,
-		.row {
+		.add {
 			grid-template-columns: 1fr 1fr;
 		}
 
 		.list-head {
 			display: none;
+		}
+
+		/* Zweizeilige Einträge: Name oben, Kürzel und Ziele darunter, Knöpfe rechts. */
+		.row {
+			grid-template-columns: auto auto minmax(0, 1fr) 34px 34px 34px;
+			gap: 4px 8px;
+			padding: 8px 4px;
+		}
+
+		.row > :nth-child(1) {
+			grid-area: 1 / 1;
+		}
+
+		.row > :nth-child(2) {
+			grid-area: 1 / 2 / 2 / 4;
+		}
+
+		.row > :nth-child(3) {
+			grid-area: 2 / 1;
+		}
+
+		.row > :nth-child(4) {
+			grid-area: 2 / 2;
+		}
+
+		.row > :nth-child(5) {
+			grid-area: 2 / 3;
+		}
+
+		.row > :nth-child(6) {
+			grid-area: 1 / 4 / 3;
+		}
+
+		.row > :nth-child(7) {
+			grid-area: 1 / 5 / 3;
+		}
+
+		.row > :nth-child(8) {
+			grid-area: 1 / 6 / 3;
+		}
+
+		.count {
+			font-size: 0.85rem;
+			white-space: nowrap;
+		}
+
+		/* Ohne Spaltenköpfe die Zähler beschriften. */
+		.count::before {
+			content: attr(data-label) ' ';
+			color: var(--muted);
+			font-size: 0.8em;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.add {
+			grid-template-columns: 1fr;
+		}
+
+		.head {
+			flex-wrap: wrap;
 		}
 	}
 </style>
