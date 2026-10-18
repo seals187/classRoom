@@ -3,19 +3,19 @@
 	import { page } from '$app/state';
 	import Icon from './Icon.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
-	import { NAV } from '$lib/nav.js';
+	import { NAV } from '#lib/nav.js';
 	import Menu from './Menu.svelte';
 	import TimeBars from './TimeBars.svelte';
 	import AnalogClock from './AnalogClock.svelte';
-	import logo from '$lib/assets/logo.svg';
+	import logo from '#lib/assets/logo.svg';
 	import NoiseLight from './NoiseLight.svelte';
 
 	/**
 	 * @type {{
-	 *   user: import('$lib/server/auth.js').User,
+	 *   user: import('#lib/server/auth.js').User,
 	 *   settings: { roomName: string, startTime: string, returnTime: string },
 	 *   warnMinutes: number,
-	 *   noise: import('$lib/server/db.js').NoiseSettings | null
+	 *   noise: import('#lib/server/db.js').NoiseSettings | null
 	 * }}
 	 */
 	let { user, settings, warnMinutes, noise } = $props();

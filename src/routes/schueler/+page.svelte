@@ -1,12 +1,12 @@
 <script>
-	import PageTitle from '$lib/components/PageTitle.svelte';
+	import PageTitle from '#lib/components/PageTitle.svelte';
 	import { invalidateAll } from '$app/navigation';
-	import { api } from '$lib/api.js';
-	import CopyButton from '$lib/components/CopyButton.svelte';
-	import Icon from '$lib/components/Icon.svelte';
-	import { autoRefresh } from '$lib/refresh.js';
+	import { api } from '#lib/api.js';
+	import CopyButton from '#lib/components/CopyButton.svelte';
+	import Icon from '#lib/components/Icon.svelte';
+	import { autoRefresh } from '#lib/refresh.js';
 	import { onMount } from 'svelte';
-	import { suggestUsername } from '$lib/username.js';
+	import { suggestUsername } from '#lib/username.js';
 
 	let { data } = $props();
 
@@ -56,7 +56,7 @@
 
 	// --- Bearbeiten eines bestehenden Schülers (immer nur eine Zeile) ---
 
-	/** @type {import('$lib/server/db.js').Student | null} */
+	/** @type {import('#lib/server/db.js').Student | null} */
 	let editing = $state(null);
 	let draft = $state({ firstName: '', lastName: '', customUsername: '' });
 
@@ -72,7 +72,7 @@
 		return suggestUsername(draft.firstName, draft.lastName, (name) => name !== own && taken.has(name));
 	});
 
-	/** @param {import('$lib/server/db.js').Student} student */
+	/** @param {import('#lib/server/db.js').Student} student */
 	function startEdit(student) {
 		editing = student;
 		draft = { firstName: student.firstName, lastName: student.lastName, customUsername: '' };
@@ -93,7 +93,7 @@
 		if (ok) editing = null;
 	}
 
-	/** @param {import('$lib/server/db.js').Student} student */
+	/** @param {import('#lib/server/db.js').Student} student */
 	function resetPassword(student) {
 		const hasLogin = !!student.username;
 		if (hasLogin && !confirm(`Neues Passwort für ${student.firstName} ${student.lastName} erzeugen? Das alte gilt dann nicht mehr.`)) return;
@@ -103,7 +103,7 @@
 		});
 	}
 
-	/** @param {import('$lib/server/db.js').Student} student */
+	/** @param {import('#lib/server/db.js').Student} student */
 	function remove(student) {
 		if (!confirm(`${student.firstName} ${student.lastName} wirklich löschen? Zugang und alle Ziele gehen dabei verloren.`)) return;
 		run(() => api(`/api/students/${student.id}`, 'DELETE'));

@@ -1,5 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { login, setSessionCookie } from '$lib/server/auth.js';
+import { login, setSessionCookie } from '#lib/server/auth.js';
 
 export const actions = {
 	default: async ({ request, cookies, url }) => {

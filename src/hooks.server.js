@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
-import { clearSessionCookie, ensureEnvTeacher, SESSION_COOKIE, validateSession } from '$lib/server/auth.js';
-import { getConfig } from '$lib/server/config.js';
+import { clearSessionCookie, ensureEnvTeacher, SESSION_COOKIE, validateSession } from '#lib/server/auth.js';
+import { getConfig } from '#lib/server/config.js';
 
 export function init() {
 	ensureEnvTeacher();

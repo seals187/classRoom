@@ -1,8 +1,8 @@
 <script>
-	import PageTitle from '$lib/components/PageTitle.svelte';
+	import PageTitle from '#lib/components/PageTitle.svelte';
 	import { invalidateAll } from '$app/navigation';
-	import { api } from '$lib/api.js';
-	import Icon from '$lib/components/Icon.svelte';
+	import { api } from '#lib/api.js';
+	import Icon from '#lib/components/Icon.svelte';
 
 	let { data } = $props();
 

@@ -1,6 +1,6 @@
 <script>
-	import PageTitle from '$lib/components/PageTitle.svelte';
-	import GoalBoard from '$lib/components/GoalBoard.svelte';
+	import PageTitle from '#lib/components/PageTitle.svelte';
+	import GoalBoard from '#lib/components/GoalBoard.svelte';
 
 	let { data } = $props();
 </script>

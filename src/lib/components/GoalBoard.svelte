@@ -1,13 +1,13 @@
 <script>
 	import { onMount } from 'svelte';
-	import { autoRefresh } from '$lib/refresh.js';
+	import { autoRefresh } from '#lib/refresh.js';
 	import Icon from './Icon.svelte';
 	import StudentTile from './StudentTile.svelte';
 
 	/**
 	 * @type {{
-	 *   students: import('$lib/server/db.js').Student[],
-	 *   user: import('$lib/server/auth.js').User | null,
+	 *   students: import('#lib/server/db.js').Student[],
+	 *   user: import('#lib/server/auth.js').User | null,
 	 *   kind: 'self' | 'lesson',
 	 *   collapsedByDefault?: boolean
 	 * }}

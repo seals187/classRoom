@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { addTeacher, requireTeacher } from '$lib/server/auth.js';
+import { addTeacher, requireTeacher } from '#lib/server/auth.js';
 
 export async function POST({ locals, request }) {
 	requireTeacher(locals);

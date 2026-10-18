@@ -1,11 +1,11 @@
 <script>
 	import { invalidateAll } from '$app/navigation';
-	import { api } from '$lib/api.js';
+	import { api } from '#lib/api.js';
 	import Icon from './Icon.svelte';
 
 	/**
 	 * @type {{
-	 *   student: import('$lib/server/db.js').Student,
+	 *   student: import('#lib/server/db.js').Student,
 	 *   kind?: 'self' | 'lesson',
 	 *   editable?: boolean,
 	 *   own?: boolean,
@@ -35,14 +35,14 @@
 		await invalidateAll();
 	}
 
-	/** @param {import('$lib/server/db.js').Goal} goal */
+	/** @param {import('#lib/server/db.js').Goal} goal */
 	const toggle = (goal) => run(() => api(`/api/goals/${goal.id}`, 'PATCH', { done: !goal.done }));
 
-	/** @param {import('$lib/server/db.js').Goal} goal */
+	/** @param {import('#lib/server/db.js').Goal} goal */
 	const remove = (goal) => run(() => api(`/api/goals/${goal.id}`, 'DELETE'));
 
 	/**
-	 * @param {import('$lib/server/db.js').Goal} goal
+	 * @param {import('#lib/server/db.js').Goal} goal
 	 * @param {HTMLInputElement} input
 	 */
 	function rename(goal, input) {

@@ -1,7 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
-	import { autoRefresh } from '$lib/refresh.js';
-	import AssignmentBox from '$lib/components/AssignmentBox.svelte';
+	import { autoRefresh } from '#lib/refresh.js';
+	import AssignmentBox from '#lib/components/AssignmentBox.svelte';
 
 	let { data } = $props();
 

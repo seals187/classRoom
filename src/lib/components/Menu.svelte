@@ -1,20 +1,20 @@
 <script>
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
-	import { api } from '$lib/api.js';
-	import { formatClock } from '$lib/time.js';
+	import { api } from '#lib/api.js';
+	import { formatClock } from '#lib/time.js';
 	import Icon from './Icon.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
-	import { NAV } from '$lib/nav.js';
-	import { noise, setNoiseConfig, startNoise, stopNoise } from '$lib/noise.svelte.js';
+	import { NAV } from '#lib/nav.js';
+	import { noise, setNoiseConfig, startNoise, stopNoise } from '#lib/noise.svelte.js';
 
 	/**
 	 * @type {{
 	 *   open: boolean,
 	 *   gearAutoHide: boolean,
 	 *   settings: { roomName: string, startTime: string, returnTime: string },
-	 *   user: import('$lib/server/auth.js').User,
-	 *   noiseSettings: import('$lib/server/db.js').NoiseSettings | null
+	 *   user: import('#lib/server/auth.js').User,
+	 *   noiseSettings: import('#lib/server/db.js').NoiseSettings | null
 	 * }}
 	 */
 	let { open = $bindable(false), gearAutoHide = $bindable(false), settings, user, noiseSettings } = $props();

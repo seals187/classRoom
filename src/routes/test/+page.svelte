@@ -1,13 +1,13 @@
 <script>
-	import PageTitle from '$lib/components/PageTitle.svelte';
+	import PageTitle from '#lib/components/PageTitle.svelte';
 	import { onMount } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
-	import { api } from '$lib/api.js';
-	import { clock } from '$lib/clock.svelte.js';
-	import { autoRefresh } from '$lib/refresh.js';
-	import { atToday, pad } from '$lib/time.js';
-	import AnalogClock from '$lib/components/AnalogClock.svelte';
-	import Icon from '$lib/components/Icon.svelte';
+	import { api } from '#lib/api.js';
+	import { clock } from '#lib/clock.svelte.js';
+	import { autoRefresh } from '#lib/refresh.js';
+	import { atToday, pad } from '#lib/time.js';
+	import AnalogClock from '#lib/components/AnalogClock.svelte';
+	import Icon from '#lib/components/Icon.svelte';
 
 	let { data } = $props();
 

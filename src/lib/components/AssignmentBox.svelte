@@ -1,11 +1,11 @@
 <script>
 	import { tick } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
-	import { api } from '$lib/api.js';
-	import { navIcon } from '$lib/nav.js';
+	import { api } from '#lib/api.js';
+	import { navIcon } from '#lib/nav.js';
 	import Icon from './Icon.svelte';
 
-	/** @type {{ assignment: import('$lib/server/assignment.js').Assignment, canEdit: boolean }} */
+	/** @type {{ assignment: import('#lib/server/assignment.js').Assignment, canEdit: boolean }} */
 	let { assignment, canEdit } = $props();
 
 	// Kein Schwarz: Normaler Text passt sich dem Theme an, festes Schwarz wäre im Dunkelmodus unlesbar.

@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
-import { saveImage } from '$lib/server/assignment.js';
-import { requireTeacher } from '$lib/server/auth.js';
+import { saveImage } from '#lib/server/assignment.js';
+import { requireTeacher } from '#lib/server/auth.js';
 
 export async function POST({ locals, request }) {
 	requireTeacher(locals);

@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
-import { requireTeacher } from '$lib/server/auth.js';
-import { deleteStudent, updateStudent } from '$lib/server/db.js';
+import { requireTeacher } from '#lib/server/auth.js';
+import { deleteStudent, updateStudent } from '#lib/server/db.js';
 
 export async function PATCH({ locals, params, request }) {
 	requireTeacher(locals);

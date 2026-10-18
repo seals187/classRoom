@@ -1,5 +1,5 @@
 <script>
-	import { navIcon } from '$lib/nav.js';
+	import { navIcon } from '#lib/nav.js';
 	import Icon from './Icon.svelte';
 
 	/** Seitenüberschrift mit demselben Symbol wie im Menü. */

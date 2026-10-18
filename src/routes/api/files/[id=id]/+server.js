@@ -1,4 +1,4 @@
-import { getFile } from '$lib/server/assignment.js';
+import { getFile } from '#lib/server/assignment.js';
 
 // Nur für angemeldete Benutzer (siehe hooks.server.js). Dateien ändern sich nie → lange cachen.
 export function GET({ params }) {

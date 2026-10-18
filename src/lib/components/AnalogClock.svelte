@@ -1,6 +1,6 @@
 <script>
-	import { clock } from '$lib/clock.svelte.js';
-	import { formatDate, pad } from '$lib/time.js';
+	import { clock } from '#lib/clock.svelte.js';
+	import { formatDate, pad } from '#lib/time.js';
 
 	/** @type {{ size?: string, showDate?: boolean }} */
 	// Groß genug, um am Beamer auch von hinten lesbar zu sein.

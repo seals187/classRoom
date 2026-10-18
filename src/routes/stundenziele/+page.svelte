@@ -1,8 +1,8 @@
 <script>
-	import PageTitle from '$lib/components/PageTitle.svelte';
+	import PageTitle from '#lib/components/PageTitle.svelte';
 	import { invalidateAll } from '$app/navigation';
-	import { api } from '$lib/api.js';
-	import GoalBoard from '$lib/components/GoalBoard.svelte';
+	import { api } from '#lib/api.js';
+	import GoalBoard from '#lib/components/GoalBoard.svelte';
 
 	let { data } = $props();
 

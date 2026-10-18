@@ -4,7 +4,7 @@ import { dirname } from 'node:path';
 import { error } from '@sveltejs/kit';
 import { getConfig, TIME } from './config.js';
 import { generatePassword, hashPassword } from './password.js';
-import { suggestUsername as suggestFreeUsername } from '$lib/username.js';
+import { suggestUsername as suggestFreeUsername } from '#lib/username.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS settings (
@@ -149,7 +149,7 @@ export function assertUsernameFree(username, exceptUserId = 0) {
 }
 
 /**
- * Freien Benutzernamen nach der gemeinsamen Regel vorschlagen (siehe $lib/username.js).
+ * Freien Benutzernamen nach der gemeinsamen Regel vorschlagen (siehe #lib/username.js).
  * @param {string} firstName
  * @param {string} lastName
  */

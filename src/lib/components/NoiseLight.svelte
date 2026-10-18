@@ -1,8 +1,8 @@
 <script>
 	import { onMount } from 'svelte';
-	import { noise, startNoise, wantsAutoStart } from '$lib/noise.svelte.js';
+	import { noise, startNoise, wantsAutoStart } from '#lib/noise.svelte.js';
 
-	/** @type {Array<import('$lib/noise.svelte.js').NoiseStatus>} */
+	/** @type {Array<import('#lib/noise.svelte.js').NoiseStatus>} */
 	const LAMPS = ['red', 'yellow', 'green'];
 	const LABELS = { red: 'Zu laut', yellow: 'Etwas leiser', green: 'Gut' };
 

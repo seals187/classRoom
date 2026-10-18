@@ -1,4 +1,4 @@
-import { deleteTeacher, requireTeacher, setTeacherPassword } from '$lib/server/auth.js';
+import { deleteTeacher, requireTeacher, setTeacherPassword } from '#lib/server/auth.js';
 
 export async function PATCH({ locals, params, request }) {
 	requireTeacher(locals);

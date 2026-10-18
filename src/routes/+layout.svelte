@@ -2,8 +2,8 @@
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { startClock } from '$lib/clock.svelte.js';
-	import Header from '$lib/components/Header.svelte';
+	import { startClock } from '#lib/clock.svelte.js';
+	import Header from '#lib/components/Header.svelte';
 
 	let { data, children } = $props();
 

@@ -1,4 +1,12 @@
-import { env } from '$env/dynamic/private';
+// Direkt aus process.env lesen: SvelteKit 3 gibt über $app/env/private nur vorab deklarierte
+// Variablen heraus. Docker (env_file) und `npm start` (--env-file) setzen process.env bereits;
+// im Entwicklungsmodus (vite dev) laden wir die .env hier selbst – vorhandene Werte gewinnen.
+try {
+	process.loadEnvFile('.env');
+} catch {
+	// Keine .env vorhanden (z. B. im Container) – dann gelten die Umgebungsvariablen.
+}
+const env = process.env;
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 

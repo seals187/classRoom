@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { renderMarkdown } from '$lib/markdown.js';
+import { renderMarkdown } from '#lib/markdown.js';
 import { getConfig } from './config.js';
 import { getDb } from './db.js';
 import { cleanHtml } from './sanitize.js';

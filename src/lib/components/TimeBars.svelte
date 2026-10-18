@@ -1,6 +1,6 @@
 <script>
-	import { clock } from '$lib/clock.svelte.js';
-	import { atToday, formatDuration, formatRemaining } from '$lib/time.js';
+	import { clock } from '#lib/clock.svelte.js';
+	import { atToday, formatDuration, formatRemaining } from '#lib/time.js';
 	import Icon from './Icon.svelte';
 
 	/** @type {{ settings: { roomName: string, startTime: string, returnTime: string }, warnMinutes: number }} */
