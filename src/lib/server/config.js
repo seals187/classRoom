@@ -24,6 +24,18 @@ const intIn = (value, min, max, fallback) => {
 	return Number.isFinite(n) && value?.trim() ? Math.min(max, Math.max(min, n)) : fallback;
 };
 
+/**
+ * "45,90" → [45, 90]; ungültige Werte fallen weg, ohne gültige gilt 45 und 90.
+ * @param {string | undefined} value
+ */
+const parseDurations = (value) => {
+	const list = (value ?? '')
+		.split(',')
+		.map((v) => Math.round(Number(v.trim())))
+		.filter((n) => Number.isFinite(n) && n >= 1 && n <= 600);
+	return list.length ? [...new Set(list)].slice(0, 4) : [45, 90];
+};
+
 /** Konfiguration aus der .env-Datei (bzw. den Umgebungsvariablen), mit Standardwerten. */
 export function getConfig() {
 	return {
@@ -34,6 +46,8 @@ export function getConfig() {
 			returnTime: timeOrEmpty(env.DEFAULT_RETURN_TIME)
 		},
 		warnMinutes: Math.max(0, Number(env.WARN_MINUTES) || 5),
+		// Knöpfe „Jetzt starten“ im Kopfband (Minuten), der erste ist der Hauptknopf.
+		lessonDurations: parseDurations(env.LESSON_DURATIONS),
 		teacher: {
 			username: env.TEACHER_USERNAME?.trim().toLowerCase() || '',
 			password: env.TEACHER_PASSWORD || ''

@@ -2,6 +2,7 @@
 	import PageTitle from '#lib/components/PageTitle.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { api } from '#lib/api.js';
+	import { ask } from '#lib/dialog.svelte.js';
 	import Icon from '#lib/components/Icon.svelte';
 
 	let { data } = $props();
@@ -52,8 +53,9 @@
 	}
 
 	/** @param {{ id: number, username: string }} teacher */
-	function remove(teacher) {
-		if (!confirm(`Lehrkraft ${teacher.username} wirklich löschen?`)) return;
+	async function remove(teacher) {
+		const ok = await ask({ title: `Lehrkraft ${teacher.username} löschen?`, confirmLabel: 'Löschen', danger: true });
+		if (!ok) return;
 		run(() => api(`/api/teachers/${teacher.id}`, 'DELETE'), `${teacher.username} gelöscht`);
 	}
 </script>

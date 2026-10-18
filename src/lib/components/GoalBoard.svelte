@@ -1,7 +1,9 @@
 <script>
 	import { onMount } from 'svelte';
 	import { autoRefresh } from '#lib/refresh.js';
+	import { page } from '$app/state';
 	import { clock } from '#lib/clock.svelte.js';
+	import { ui } from '#lib/ui.svelte.js';
 	import StudentTile from './StudentTile.svelte';
 
 	/**
@@ -20,52 +22,57 @@
 	const STORAGE_KEY = 'goalsExpanded';
 	const STALE_MINUTES = 15;
 	const GAP = 10;
-
-	/** @type {Record<string, string>} */
-	const SORT_LABELS =
-		kind === 'self' ? { active: 'zuletzt aktiv', name: 'Name' } : { name: 'Name', progress: 'Fortschritt' };
-	const sortKey = `goalSort.${kind}`;
+	// Spalten: mindestens 180px breit, auf schmalen Bildschirmen immer 2.
+	const MIN_TILE = 180;
 
 	const isTeacher = $derived(user?.role === 'teacher');
 	const ownId = $derived(user?.studentId ?? null);
 	const isSelf = $derived(kind === 'self');
-	// Zeilenhöhe einer zugeklappten Kachel (Selbstlernen hat eine Zeile mehr).
-	const row = $derived(isSelf ? 78 : 59);
-
-	let sortBy = $state(kind === 'self' ? 'active' : 'name');
 
 	// Alle auf/zu (pro Gerät gemerkt) – einzelne Kacheln lassen sich davon abweichend umschalten.
 	let expandAll = $state(false);
 	/** @type {Record<number, boolean>} */
 	let overrides = $state({});
 
-	/** @param {import('#lib/server/db.js').Student} s */
-	const isComplete = (s) => s.goals.length > 0 && s.goals.every((g) => g.done);
-	/** @param {import('#lib/server/db.js').Student} s */
-	const ratio = (s) => (s.goals.length ? s.goals.filter((g) => g.done).length / s.goals.length : 0);
+	let width = $state(0);
 
-	const byName = (/** @type {import('#lib/server/db.js').Student} */ a, /** @type {typeof a} */ b) =>
-		a.firstName.localeCompare(b.firstName, 'de') || a.lastName.localeCompare(b.lastName, 'de');
+	// Feste Reihenfolge nach Name; Schüler sehen ihre eigene Kachel zuerst.
+	const ordered = $derived(
+		[...students].sort(
+			(a, b) =>
+				Number(b.id === ownId) - Number(a.id === ownId) ||
+				a.firstName.localeCompare(b.firstName, 'de') ||
+				a.lastName.localeCompare(b.lastName, 'de')
+		)
+	);
 
-	const sorted = $derived.by(() => {
-		const list = [...students];
-		if (sortBy === 'progress') {
-			// Wer am wenigsten erledigt hat, zuerst – Fertige landen damit am Ende.
-			list.sort((a, b) => ratio(a) - ratio(b) || byName(a, b));
-		} else if (sortBy === 'active') {
-			// Am längsten nichts abgehakt zuerst, ohne Ziele danach, Fertige ans Ende.
-			const rank = (/** @type {typeof list[number]} */ s) => (isComplete(s) ? 2 : s.goals.length === 0 ? 1 : 0);
-			list.sort(
-				(a, b) =>
-					rank(a) - rank(b) || (a.activeAt ?? Infinity) - (b.activeAt ?? Infinity) || byName(a, b)
-			);
-		} else {
-			list.sort(byName);
-		}
-		// Schüler sehen ihre eigene Kachel zuerst.
-		if (ownId !== null) list.sort((a, b) => Number(b.id === ownId) - Number(a.id === ownId));
-		return list;
+	// Echte Spalten statt Grid-Zeilen: Aufklappen schiebt nur die Kacheln darunter in derselben
+	// Spalte nach unten, nichts springt in eine andere Spalte. Verteilt zeilenweise (links → rechts).
+	const columnCount = $derived(
+		width === 0 ? 5 : width < 640 ? 2 : Math.max(1, Math.floor((width + GAP) / (MIN_TILE + GAP)))
+	);
+	const columns = $derived.by(() => {
+		/** @type {import('#lib/server/db.js').Student[][]} */
+		const cols = Array.from({ length: columnCount }, () => []);
+		ordered.forEach((student, i) => cols[i % columnCount].push(student));
+		return cols;
 	});
+
+	// Schüler können die Kacheln der anderen ausblenden (pro Gerät gemerkt) – Kopfband und
+	// Klassen-Fortschritt bleiben, nur das Raster zeigt dann allein die eigene Kachel.
+	const FOCUS_KEY = 'goalsOnlyOwn';
+	let onlyOwn = $state(false);
+	const ownStudent = $derived(ownId === null ? null : (students.find((s) => s.id === ownId) ?? null));
+	const focused = $derived(onlyOwn && ownStudent !== null);
+
+	function toggleOnlyOwn() {
+		onlyOwn = !onlyOwn;
+		try {
+			localStorage.setItem(FOCUS_KEY, onlyOwn ? '1' : '0');
+		} catch {
+			// Gilt dann nur bis zum Neuladen.
+		}
+	}
 
 	/** @param {number} id */
 	const isOpen = (id) => overrides[id] ?? (expandAll || id === ownId);
@@ -80,78 +87,87 @@
 		}
 	}
 
-	function persistSort() {
-		try {
-			localStorage.setItem(sortKey, sortBy);
-		} catch {
-			// Gilt dann nur bis zum Neuladen.
-		}
-	}
-
 	onMount(() => {
 		expandAll = !collapsedByDefault;
 		try {
 			const stored = localStorage.getItem(STORAGE_KEY);
 			if (stored !== null) expandAll = stored === '1';
-			const sort = localStorage.getItem(sortKey);
-			if (sort && sort in SORT_LABELS) sortBy = sort;
+			onlyOwn = localStorage.getItem(FOCUS_KEY) === '1';
 		} catch {
-			// Kein localStorage – Standardwerte.
+			// Kein localStorage – Standard aus der .env.
 		}
 		return autoRefresh(5000);
 	});
 </script>
 
 <div class="board" style:--page-accent={isSelf ? 'var(--self-accent)' : 'var(--lesson-accent)'}>
-
 	<div class="head">
 		<h1>
 			<span class="dot" aria-hidden="true"></span>
 			{@render title()}
 		</h1>
 		<div class="controls">
-			{#if isSelf}
-				<span class="legend"><span class="legend-dot" aria-hidden="true"></span>seit {STALE_MINUTES}+ min nichts abgehakt</span>
+			{#if students.length > 0}
+				<span class="legend"><span class="legend-dot" aria-hidden="true"></span>{STALE_MINUTES}+ min nichts abgehakt</span>
 			{/if}
-			<label class="sort">
-				Sortiert:
-				<select bind:value={sortBy} onchange={persistSort}>
-					{#each Object.entries(SORT_LABELS) as [value, label] (value)}
-						<option {value}>{label}</option>
-					{/each}
-				</select>
-			</label>
 			{#if isTeacher && students.length > 0}
 				<button class="link" aria-pressed={expandAll} onclick={toggleAll}>
 					{expandAll ? 'Alle einklappen' : 'Alle aufklappen'}
 				</button>
 			{/if}
+			{#if ownStudent && students.length > 1}
+				<button class="link focus-toggle" aria-pressed={onlyOwn} onclick={toggleOnlyOwn}>
+					{onlyOwn ? 'Alle Schüler zeigen' : 'Nur meine Kachel'}
+				</button>
+			{/if}
+			{#if page.data.background?.canChoose}
+				<button class="link" onclick={() => (ui.backgroundPicker = true)}>Hintergrund</button>
+			{/if}
 			{@render actions?.()}
 		</div>
 	</div>
 
-	{#if sorted.length === 0}
+	{#if ordered.length === 0}
 		<section class="empty">
 			<h2>Noch keine Schüler</h2>
 			{#if isTeacher}
 				<p>Lege zuerst die Klasse unter <a href="/schueler">Schüler verwalten</a> an.</p>
 			{/if}
 		</section>
+	{:else if focused && ownStudent}
+		<!-- Fokus: nur die eigene Kachel, breiter und mittig -->
+		<div class="focus">
+			<StudentTile
+				student={ownStudent}
+				{kind}
+				editable
+				own
+				open={isOpen(ownStudent.id)}
+				onopenchange={(open) => (overrides[ownStudent.id] = open)}
+				now={clock.now}
+				staleMinutes={STALE_MINUTES}
+			/>
+			<p class="focus-hint">
+				Die Kacheln der anderen sind ausgeblendet. <button class="link" onclick={toggleOnlyOwn}>Alle Schüler zeigen</button>
+			</p>
+		</div>
 	{:else}
-		<div class="tiles" style:--row="{row}px" style:--gap="{GAP}px">
-			{#each sorted as student (student.id)}
-				<StudentTile
-					{student}
-					{kind}
-					editable={isTeacher || student.id === ownId}
-					own={student.id === ownId}
-					open={isOpen(student.id)}
-					onopenchange={(open) => (overrides[student.id] = open)}
-					now={clock.now}
-					staleMinutes={STALE_MINUTES}
-					{row}
-					gap={GAP}
-				/>
+		<div class="tiles" bind:clientWidth={width} style:--cols={columnCount} style:--gap="{GAP}px">
+			{#each columns as column, c (c)}
+				<div class="column">
+					{#each column as student (student.id)}
+						<StudentTile
+							{student}
+							{kind}
+							editable={isTeacher || student.id === ownId}
+							own={student.id === ownId}
+							open={isOpen(student.id)}
+							onopenchange={(open) => (overrides[student.id] = open)}
+							now={clock.now}
+							staleMinutes={STALE_MINUTES}
+						/>
+					{/each}
+				</div>
 			{/each}
 		</div>
 	{/if}
@@ -171,6 +187,16 @@
 		justify-content: space-between;
 		gap: 6px 20px;
 		margin-top: 4px;
+	}
+
+	/* Auf einem Hintergrund (Farbverlauf/Bild) steht die Titelzeile auf einer Milchglas-Leiste. */
+	:global(main[data-bg]) .head {
+		margin-top: 0;
+		padding: 8px 16px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background: color-mix(in srgb, var(--surface) 82%, transparent);
+		backdrop-filter: blur(10px);
 	}
 
 	h1 {
@@ -212,26 +238,6 @@
 		background: var(--warn);
 	}
 
-	.sort {
-		display: inline-flex;
-		align-items: center;
-		gap: 2px;
-	}
-
-	select {
-		padding: 2px 0;
-		border: 0;
-		background: transparent;
-		color: var(--muted);
-		font: inherit;
-		cursor: pointer;
-	}
-
-	select option {
-		background: var(--surface);
-		color: var(--text);
-	}
-
 	.link {
 		padding: 2px 0;
 		border: 0;
@@ -245,13 +251,48 @@
 		text-decoration: underline;
 	}
 
-	/* Raster: zugeklappt eine Zeile, aufgeklappt span N (siehe StudentTile). */
+	/* Feste Spalten nebeneinander, in jeder Spalte die Kacheln untereinander. */
 	.tiles {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-		grid-auto-rows: var(--row);
-		grid-auto-flow: dense;
+		grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+		align-items: start;
 		gap: var(--gap);
+	}
+
+	.column {
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--gap);
+	}
+
+	.focus {
+		width: min(520px, 100%);
+		margin: 8px auto 0;
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	/* Text auf einer Milchglas-Fläche, damit er auch auf Hintergrundbildern lesbar bleibt. */
+	.focus-hint {
+		align-self: center;
+		margin: 0;
+		padding: 6px 14px;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--surface) 82%, transparent);
+		backdrop-filter: blur(8px);
+		color: var(--muted);
+		font-size: 13px;
+		text-align: center;
+	}
+
+	.focus-hint .link {
+		font-size: 13px;
+	}
+
+	.link.focus-toggle[aria-pressed='true'] {
+		font-weight: 700;
 	}
 
 	.empty {
@@ -272,10 +313,6 @@
 	}
 
 	@media (max-width: 640px) {
-		.tiles {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-		}
-
 		h1 {
 			font-size: 18px;
 		}

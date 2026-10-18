@@ -1,4 +1,5 @@
 <script>
+	import { notify } from '#lib/dialog.svelte.js';
 	import Icon from './Icon.svelte';
 
 	/** @type {{ text: string, label: string, showLabel?: boolean }} */
@@ -37,7 +38,7 @@
 			clearTimeout(timer);
 			timer = setTimeout(() => (copied = false), 1500);
 		} catch {
-			alert('Kopieren hat nicht geklappt – bitte von Hand markieren und kopieren.');
+			notify('Bitte von Hand markieren und kopieren.', 'Kopieren hat nicht geklappt');
 		}
 	}
 </script>

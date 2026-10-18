@@ -8,17 +8,17 @@
 	import { NAV } from '#lib/nav.js';
 	import logo from '#lib/assets/logo.svg';
 	import { noise, setNoiseConfig, startNoise, stopNoise } from '#lib/noise.svelte.js';
+	import { ui } from '#lib/ui.svelte.js';
 
 	/**
 	 * @type {{
 	 *   open: boolean,
-	 *   autoHide: boolean,
 	 *   settings: { roomName: string, startTime: string, returnTime: string },
 	 *   user: import('#lib/server/auth.js').User,
 	 *   noiseSettings: import('#lib/server/db.js').NoiseSettings | null
 	 * }}
 	 */
-	let { open = $bindable(false), autoHide = $bindable(false), settings, user, noiseSettings } = $props();
+	let { open = $bindable(false), settings, user, noiseSettings } = $props();
 
 	const isTeacher = $derived(user.role === 'teacher');
 	// Schüler sehen nur ihre Seiten, Darstellung und Abmelden.
@@ -93,14 +93,6 @@
 		form.startTime = '';
 		form.returnTime = '';
 		run(() => api('/api/settings', 'PUT', form), 'Zeiten zurückgesetzt');
-	}
-
-	function persistAutoHide() {
-		try {
-			localStorage.setItem('gearAutoHide', autoHide ? '1' : '0');
-		} catch {
-			// Ignorieren – gilt dann nur bis zum Neuladen.
-		}
 	}
 </script>
 
@@ -210,15 +202,23 @@
 			</details>
 		{/if}
 
-		<label class="check">
-			<input type="checkbox" bind:checked={autoHide} onchange={persistAutoHide} />
-			Menü-Knopf ausblenden (erscheint beim Darüberfahren)
-		</label>
-
 		<div class="theme">
 			<span>Darstellung</span>
 			<ThemeToggle />
 		</div>
+
+		{#if page.data.background?.canChoose}
+			<div class="background">
+				<span>Hintergrund</span>
+				<button
+					type="button"
+					onclick={() => {
+						open = false;
+						ui.backgroundPicker = true;
+					}}>Ändern…</button
+				>
+			</div>
+		{/if}
 
 		<form class="logout" method="POST" action="/logout">
 			<span>Angemeldet als <strong>{isTeacher ? user.username : user.displayName}</strong></span>
@@ -463,15 +463,18 @@
 		color: var(--danger);
 	}
 
-	.check {
-		flex-direction: row;
+	.theme {
+		display: flex;
 		align-items: center;
+		justify-content: space-between;
 		gap: 8px;
 		padding-top: 12px;
 		border-top: 1px solid var(--border);
+		font-size: 0.82rem;
+		color: var(--muted);
 	}
 
-	.theme {
+	.background {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;

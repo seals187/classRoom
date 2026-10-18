@@ -1,11 +1,12 @@
 <script>
 	import { invalidateAll } from '$app/navigation';
 	import { api } from '#lib/api.js';
+	import { showError } from '#lib/dialog.svelte.js';
 	import Icon from './Icon.svelte';
 
 	/**
-	 * Kachel eines Schülers im Raster. Zugeklappt eine Rasterzeile hoch, aufgeklappt so viele
-	 * Zeilen, wie die Ziele brauchen (grid-row: span N) – die anderen Kacheln rücken nach.
+	 * Kachel eines Schülers in seiner Spalte. Aufgeklappt wird sie nach unten länger –
+	 * nur die Kacheln darunter in derselben Spalte rücken nach.
 	 * @type {{
 	 *   student: import('#lib/server/db.js').Student,
 	 *   kind?: 'self' | 'lesson',
@@ -14,9 +15,7 @@
 	 *   open?: boolean,
 	 *   onopenchange?: (open: boolean) => void,
 	 *   now?: Date | null,
-	 *   staleMinutes?: number,
-	 *   row?: number,
-	 *   gap?: number
+	 *   staleMinutes?: number
 	 * }}
 	 */
 	let {
@@ -27,14 +26,11 @@
 		open = false,
 		onopenchange,
 		now = null,
-		staleMinutes = 15,
-		row = 56,
-		gap = 10
+		staleMinutes = 15
 	} = $props();
 
 	let editing = $state(false);
 	let newGoal = $state('');
-	let contentHeight = $state(0);
 
 	const total = $derived(student.goals.length);
 	const done = $derived(student.goals.filter((g) => g.done).length);
@@ -48,9 +44,7 @@
 	const minutes = $derived(
 		now && student.activeAt !== null ? Math.max(0, Math.floor((now.getTime() - student.activeAt) / 60000)) : null
 	);
-	const stale = $derived(isSelf && !complete && total > 0 && minutes !== null && minutes >= staleMinutes);
-	// Zugeklappt genau eine Rasterzeile; aufgeklappt so viele ganze Zeilen, wie der Inhalt (+ 2px Rahmen) braucht.
-	const span = $derived(expanded ? Math.max(1, Math.ceil((contentHeight + 2 + gap) / (row + gap))) : 1);
+	const stale = $derived(!complete && total > 0 && minutes !== null && minutes >= staleMinutes);
 
 	const shortName = $derived(`${student.firstName} ${student.lastName.charAt(0)}.`);
 
@@ -62,7 +56,7 @@
 		try {
 			await action();
 		} catch (err) {
-			alert(err instanceof Error ? err.message : String(err));
+			showError(err);
 		}
 		await invalidateAll();
 	}
@@ -110,10 +104,9 @@
 	class:expanded
 	class:stale
 	class:own
-	style:grid-row-end="span {span}"
 	title="{student.firstName} {student.lastName}"
 >
-	<div class="inner" bind:offsetHeight={contentHeight}>
+	<div class="inner">
 		<button class="summary" aria-expanded={expanded} onclick={toggleOpen}>
 			<span class="row1">
 				<span class="chevron" aria-hidden="true">{expanded ? '▾' : '▸'}</span>
@@ -136,8 +129,14 @@
 			{/if}
 		</button>
 
-		<div class="bar" role="img" aria-label="Fortschritt {done} von {total}">
-			<div class="fill" style:width="{percent}%"></div>
+		<div class="bar-row">
+			<div class="bar" role="img" aria-label="Fortschritt {done} von {total}">
+				<div class="fill" style:width="{percent}%"></div>
+			</div>
+			<!-- Stundenziele haben keine zweite Zeile: die Zeit steht bei orange markierten Kacheln neben dem Balken. -->
+			{#if !isSelf && stale && minutes !== null}
+				<span class="late" title="seit {since(minutes)} nichts abgehakt">{since(minutes)}</span>
+			{/if}
 		</div>
 
 		{#if expanded}
@@ -299,9 +298,23 @@
 		color: var(--muted);
 	}
 
-	.stale .mins {
+	.stale .mins,
+	.late {
 		color: var(--warn);
 		font-weight: 600;
+	}
+
+	.bar-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	/* Zeilenhöhe = Balkenhöhe, damit markierte Kacheln nicht höher werden. */
+	.late {
+		flex-shrink: 0;
+		font-size: 12px;
+		line-height: 8px;
 	}
 
 	.ok {
@@ -309,6 +322,7 @@
 	}
 
 	.bar {
+		flex: 1;
 		height: 8px;
 		overflow: hidden;
 		border-radius: 999px;

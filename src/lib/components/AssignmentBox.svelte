@@ -1,12 +1,14 @@
 <script>
-	import { tick } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { ui } from '#lib/ui.svelte.js';
 	import { invalidateAll } from '$app/navigation';
 	import { api } from '#lib/api.js';
+	import { ask, askText, showError } from '#lib/dialog.svelte.js';
+	import { shrinkImage } from '#lib/shrink-image.js';
 	import Icon from './Icon.svelte';
 
-	/** @type {{ assignment: import('#lib/server/assignment.js').Assignment, canEdit: boolean }} */
-	let { assignment, canEdit } = $props();
+	/** @type {{ assignment: import('#lib/server/assignment.js').Assignment, canEdit: boolean, studentCount?: number }} */
+	let { assignment, canEdit, studentCount = 0 } = $props();
 
 	// Kein Schwarz: Normaler Text passt sich dem Theme an, festes Schwarz wäre im Dunkelmodus unlesbar.
 	const COLORS = [
@@ -32,6 +34,92 @@
 
 	/** @type {string | null} */
 	let zoomed = $state(null);
+
+	// Schriftgröße (A− / A+) pro Gerät, z. B. größer am Beamer.
+	const SCALE_KEY = 'assignmentScale';
+	const SCALE_MIN = 0.8;
+	const SCALE_MAX = 1.6;
+	let scale = $state(1);
+	/** @type {HTMLElement | undefined} */
+	let sectionEl = $state();
+	let fullscreen = $state(false);
+	let goalsMessage = $state('');
+	// Erst im Browser (DOMParser) – sonst passt das Server-HTML nicht zum Client.
+	let mounted = $state(false);
+
+	onMount(() => {
+		mounted = true;
+		try {
+			const stored = Number(localStorage.getItem(SCALE_KEY));
+			if (stored >= SCALE_MIN && stored <= SCALE_MAX) scale = stored;
+		} catch {
+			// Kein localStorage – Standardgröße.
+		}
+		const onChange = () => (fullscreen = document.fullscreenElement === sectionEl);
+		document.addEventListener('fullscreenchange', onChange);
+		return () => document.removeEventListener('fullscreenchange', onChange);
+	});
+
+	/** @param {number} delta */
+	function changeScale(delta) {
+		scale = Math.round(Math.min(SCALE_MAX, Math.max(SCALE_MIN, scale + delta)) * 10) / 10;
+		try {
+			localStorage.setItem(SCALE_KEY, String(scale));
+		} catch {
+			// Gilt dann nur bis zum Neuladen.
+		}
+	}
+
+	function toggleFullscreen() {
+		if (document.fullscreenElement) document.exitFullscreen();
+		else sectionEl?.requestFullscreen().catch(() => {});
+	}
+
+	/** Haupttext der Schritte (ohne graue Zusatzzeile) – Grundlage für „Als Stundenziele“. */
+	const stepTexts = $derived.by(() => {
+		if (!mounted || !assignment.html) return [];
+		const doc = new DOMParser().parseFromString(assignment.html, 'text/html');
+		return [...doc.querySelectorAll('body > ol > li')]
+			.map((li) => {
+				const br = [...li.childNodes].find((n) => n.nodeName === 'BR');
+				while (br?.nextSibling) br.nextSibling.remove();
+				return (li.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+			})
+			.filter(Boolean);
+	});
+
+	// Fenster „Als Stundenziele übernehmen?“: Schritte an-/abwählen, optional bisherige ersetzen.
+	let goalsOpen = $state(false);
+	/** @type {boolean[]} */
+	let picked = $state([]);
+	let replaceGoals = $state(false);
+	let goalsBusy = $state(false);
+	const pickedTexts = $derived(stepTexts.filter((_, i) => picked[i]));
+
+	function openGoals() {
+		picked = stepTexts.map(() => true);
+		replaceGoals = false;
+		goalsOpen = true;
+	}
+
+	async function createGoals() {
+		goalsBusy = true;
+		try {
+			const { added, students } = await api('/api/goals', 'POST', {
+				kind: 'lesson',
+				texts: pickedTexts,
+				replace: replaceGoals
+			});
+			goalsMessage = added ? `✓ ${added} Ziele für ${students} Schüler` : '✓ Schon übernommen';
+			goalsOpen = false;
+			await invalidateAll();
+		} catch (err) {
+			goalsMessage = err instanceof Error ? err.message : String(err);
+		} finally {
+			goalsBusy = false;
+		}
+		setTimeout(() => (goalsMessage = ''), 4000);
+	}
 
 	// Letzte Auswahl im Editor merken – Farbwähler und Link-Dialog nehmen sonst den Fokus mit.
 	/** @type {Range | null} */
@@ -77,11 +165,18 @@
 	}
 
 	async function remove() {
-		if (!confirm('Auftrag wirklich löschen? Titel, Text und Bilder werden entfernt.')) return;
+		const ok = await ask({
+			title: 'Auftrag löschen?',
+			message: 'Titel, Text und Bilder werden entfernt.',
+			confirmLabel: 'Löschen',
+			danger: true
+		});
+		if (!ok) return;
 		try {
 			await api('/api/assignment', 'DELETE');
+			editing = false;
 		} catch (err) {
-			alert(err instanceof Error ? err.message : String(err));
+			showError(err);
 		}
 		await invalidateAll();
 	}
@@ -134,8 +229,10 @@
 		if (/** @type {HTMLElement} */ (e.target).closest('button')) e.preventDefault();
 	}
 
-	function addLink() {
-		const url = prompt('Adresse des Links (https://…)')?.trim();
+	async function addLink() {
+		const url = (
+			await askText({ title: 'Link einfügen', message: 'Adresse des Links:', placeholder: 'https://…', confirmLabel: 'Einfügen' })
+		)?.trim();
 		if (!url) return;
 		if (!/^(https?:\/\/|mailto:)/i.test(url)) {
 			error = 'Links müssen mit https:// (oder http://) beginnen.';
@@ -162,7 +259,8 @@
 			error = '';
 			try {
 				const form = new FormData();
-				form.append('file', file);
+				// Erst im Browser verkleinern (einige hundert KB), dann hochladen.
+				form.append('file', await shrinkImage(file));
 				const { id } = await api('/api/files', 'POST', form);
 				images = [...images, id];
 			} catch (err) {
@@ -197,10 +295,38 @@
 	 * Schritte der nummerierten Liste: Text nach dem ersten Zeilenumbruch (Umschalt+Enter)
 	 * als graue Zusatzzeile anzeigen. Nur fürs Anzeigen – gespeichert bleibt das HTML unverändert.
 	 * @param {HTMLElement} node
-	 * @param {string} _html neu anwenden, wenn sich der Auftrag ändert
 	 */
-	function steps(node, _html) {
+	function steps(node) {
 		function apply() {
+			// Links: nur die Adresse ohne https:// und www. zeigen, wenn der Text die Adresse selbst ist.
+			for (const a of node.querySelectorAll('a')) {
+				const href = a.getAttribute('href') ?? '';
+				if (a.textContent?.trim() !== href) continue;
+				a.textContent = href.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '');
+			}
+			// Absätze am Ende, die nur Links enthalten, unten in der Karte sammeln.
+			if (!node.querySelector(':scope > .links')) {
+				/** @param {Element} el */
+				const onlyLinks = (el) =>
+					el.querySelector('a') !== null &&
+					[...el.childNodes].every((n) => n.nodeName === 'A' || n.nodeName === 'BR' || !n.textContent?.trim());
+				/** @param {Element} el */
+				const blank = (el) => !el.textContent?.trim() && !el.querySelector('img');
+				const tail = [];
+				let el = node.lastElementChild;
+				while (el && (onlyLinks(el) || blank(el))) {
+					const prev = el.previousElementSibling;
+					if (onlyLinks(el)) tail.unshift(el);
+					else el.remove();
+					el = prev;
+				}
+				if (tail.length) {
+					const links = document.createElement('div');
+					links.className = 'links';
+					links.append(...tail);
+					node.append(links);
+				}
+			}
 			for (const li of node.querySelectorAll(':scope > ol > li')) {
 				if (li.querySelector(':scope > .sub')) continue;
 				const br = [...li.childNodes].find((n) => n.nodeName === 'BR');
@@ -212,25 +338,90 @@
 			}
 		}
 		apply();
-		return { update: apply };
 	}
 </script>
 
 <svelte:document onselectionchange={onSelectionChange} />
-<svelte:window onkeydown={(e) => e.key === 'Escape' && (zoomed = null)} />
+<svelte:window
+	onkeydown={(e) => {
+		if (e.key !== 'Escape') return;
+		zoomed = null;
+		goalsOpen = false;
+	}}
+/>
 
-<section class="assignment" class:editing class:with-images={editing || shownImages.length > 0}>
+<section
+	class="assignment"
+	class:editing
+	class:fullscreen
+	class:with-images={editing || shownImages.length > 0}
+	style:--scale={editing ? 1 : scale}
+	bind:this={sectionEl}
+>
 	<div class="main">
 		<header>
 			<span class="label">{editing ? 'Auftrag bearbeiten' : 'Auftrag'}</span>
-			{#if canEdit && !editing}
-				<div class="head-actions">
-					<button class="text-btn" onclick={startEdit}><Icon name="pencil" size={13} /> Bearbeiten</button>
-					{#if !isEmpty}<button class="text-btn danger" onclick={remove}>Löschen</button>{/if}
+			{#if !editing}
+				<div class="tools">
+					{#if goalsMessage}<span class="tool-message">{goalsMessage}</span>{/if}
+					{#if canEdit && stepTexts.length > 0}
+						<div class="goals-anchor">
+							<button
+								class="tool accent"
+								onclick={() => (goalsOpen ? (goalsOpen = false) : openGoals())}
+								aria-expanded={goalsOpen}
+								title="Die Schritte allen Schülern als Stundenziele geben"
+							>
+								☑ Als Stundenziele
+							</button>
+							{#if goalsOpen}
+								<button class="pop-backdrop" tabindex="-1" aria-label="Schließen" onclick={() => (goalsOpen = false)}></button>
+								<div class="goals-pop" role="dialog" aria-labelledby="goals-pop-title">
+									<h3 id="goals-pop-title">Als Stundenziele übernehmen?</h3>
+									<p class="pop-sub">
+										Diese Punkte werden für {studentCount === 1 ? 'den Schüler' : `alle ${studentCount} Schüler`} als Ziele angelegt.
+									</p>
+									<ul>
+										{#each stepTexts as text, i (i)}
+											<li>
+												<label>
+													<input type="checkbox" bind:checked={picked[i]} />
+													<span>{text}</span>
+												</label>
+											</li>
+										{/each}
+									</ul>
+									<label class="replace">
+										<input type="checkbox" bind:checked={replaceGoals} />
+										Bisherige Stundenziele ersetzen
+									</label>
+									<div class="pop-actions">
+										<button onclick={() => (goalsOpen = false)} disabled={goalsBusy}>Abbrechen</button>
+										<button class="primary" onclick={createGoals} disabled={goalsBusy || pickedTexts.length === 0 || studentCount === 0}>
+											{pickedTexts.length === 1 ? '1 Ziel anlegen' : `${pickedTexts.length} Ziele anlegen`}
+										</button>
+									</div>
+								</div>
+							{/if}
+						</div>
+					{/if}
+					{#if !isEmpty}
+						<button class="tool" onclick={() => changeScale(-0.1)} disabled={scale <= SCALE_MIN} title="Schrift kleiner">A−</button>
+						<button class="tool" onclick={() => changeScale(0.1)} disabled={scale >= SCALE_MAX} title="Schrift größer">A+</button>
+					{/if}
+					{#if canEdit}
+						<button class="tool" onclick={startEdit} title="Bearbeiten" aria-label="Bearbeiten"><Icon name="pencil" size={13} /></button>
+					{/if}
+					{#if !isEmpty}
+						<button class="tool" onclick={toggleFullscreen} title={fullscreen ? 'Vollbild beenden' : 'Vollbild'} aria-label="Vollbild">
+							<Icon name={fullscreen ? 'close' : 'expand'} size={13} />
+						</button>
+					{/if}
 				</div>
-			{:else if editing}
+			{:else}
 				<!-- Oben statt unter dem Editor – so muss man zum Speichern nicht scrollen. -->
 				<div class="head-actions">
+					{#if !isEmpty}<button class="text-btn danger" onclick={remove} disabled={saving}>Auftrag löschen</button>{/if}
 					<button onclick={() => (editing = false)} disabled={saving}>Abbrechen</button>
 					<button class="primary" onclick={save} disabled={saving || uploading > 0}>
 						{uploading > 0 ? 'Bild lädt…' : 'Speichern'}
@@ -319,17 +510,21 @@
 			</p>
 		{:else}
 			{#if assignment.title}<h2>{assignment.title}</h2>{/if}
-			<div class="content" use:steps={assignment.html}>{@html assignment.html}</div>
+			<!-- Bei neuem Text komplett neu aufbauen – steps verschiebt Knoten, die @html sonst nicht mehr findet. -->
+			{#key assignment.html}
+				<div class="content" use:steps>{@html assignment.html}</div>
+			{/key}
 		{/if}
 	</div>
 
 	{#if editing || shownImages.length > 0}
 		<!-- Bilder rechts als Vorschau, groß per Klick -->
 		<aside class="media" class:multi={shownImages.length > 2}>
-			{#each shownImages as id (id)}
+			{#each shownImages as id, i (id)}
 				<div class="thumb">
-					<button type="button" class="zoom-btn" aria-label="Bild vergrößern" onclick={() => (zoomed = fileUrl(id))}>
+					<button type="button" class="zoom-btn" aria-label="Bild {i + 1} vergrößern" onclick={() => (zoomed = fileUrl(id))}>
 						<img src={fileUrl(id)} alt="" loading="lazy" />
+						{#if !editing}<span class="zoom-label" aria-hidden="true">⤢ Bild {i + 1}</span>{/if}
 					</button>
 					{#if editing}
 						<button
@@ -346,8 +541,6 @@
 					{uploading > 0 ? 'Wird hochgeladen…' : '+ Bild'}
 				</button>
 				<p class="help">Auch per Strg+V oder Hineinziehen</p>
-			{:else}
-				<p class="help caption">Klick vergrößert</p>
 			{/if}
 		</aside>
 	{/if}
@@ -369,14 +562,186 @@
 		grid-template-columns: minmax(0, 1fr);
 		align-content: start;
 		gap: 32px;
-		padding: 24px 28px;
+		padding: 20px 28px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		background: var(--surface);
+		box-shadow: var(--shadow);
 	}
 
 	.assignment.with-images {
 		grid-template-columns: minmax(0, 1fr) 270px;
+	}
+
+	/* Vollbild (⛶): Karte füllt den Bildschirm, Text etwas größer. */
+	.assignment.fullscreen {
+		overflow-y: auto;
+		padding: 40px 56px;
+		border: 0;
+		border-radius: 0;
+		font-size: 1.15em;
+	}
+
+	/* Anzeige: alle Vorschauen gleich zugeschnitten (4:3 aus der Bildmitte) – Hoch- und Querformat
+	   sehen gleich aus. Bis zwei Bilder untereinander, ab drei ein 2er-Raster. Ganz: Großansicht. */
+	.assignment:not(.editing) .media .zoom-btn img {
+		aspect-ratio: 4 / 3;
+	}
+
+	.assignment:not(.editing) .media.multi {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.zoom-btn {
+		position: relative;
+	}
+
+	.zoom-label {
+		position: absolute;
+		right: 8px;
+		bottom: 8px;
+		padding: 2px 8px;
+		border-radius: 6px;
+		background: color-mix(in srgb, var(--surface) 88%, transparent);
+		color: var(--muted);
+		box-shadow: 0 1px 3px rgb(0 0 0 / 15%);
+		font-size: 12px;
+		line-height: 1.5;
+	}
+
+	.media.multi .zoom-label {
+		right: 5px;
+		bottom: 5px;
+		font-size: 11px;
+	}
+
+	/* Werkzeuge oben rechts: kleine umrandete Knöpfe. */
+	.tools {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 6px;
+	}
+
+	.tool {
+		display: inline-grid;
+		place-items: center;
+		min-width: 32px;
+		height: 28px;
+		padding: 0 9px;
+		border: 1px solid var(--border);
+		border-radius: 7px;
+		background: transparent;
+		color: var(--muted);
+		font-size: 13px;
+		font-weight: 600;
+	}
+
+	.tool:hover:not(:disabled) {
+		color: var(--text);
+		border-color: var(--muted);
+	}
+
+	.tool.accent {
+		border-color: var(--lesson-accent);
+		background: color-mix(in srgb, var(--lesson-accent) 12%, transparent);
+		color: var(--lesson-accent);
+	}
+
+	/* Fenster „Als Stundenziele übernehmen?“ unter dem Knopf. */
+	.goals-anchor {
+		position: relative;
+	}
+
+	.pop-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 14;
+		padding: 0;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		cursor: default;
+	}
+
+	.goals-pop {
+		position: absolute;
+		top: calc(100% + 8px);
+		right: 0;
+		z-index: 15;
+		width: min(400px, calc(100vw - 32px));
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		padding: 16px 18px;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background: var(--surface);
+		box-shadow: 0 12px 40px rgb(10 15 30 / 28%);
+		text-align: left;
+	}
+
+	.goals-pop h3 {
+		margin: 0;
+		font-size: 17px;
+	}
+
+	.pop-sub {
+		margin: -6px 0 2px;
+		color: var(--muted);
+		font-size: 13px;
+	}
+
+	.goals-pop ul {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.goals-pop label {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 5px 0;
+		font-size: 15px;
+		cursor: pointer;
+	}
+
+	.goals-pop input[type='checkbox'] {
+		flex-shrink: 0;
+		width: 17px;
+		height: 17px;
+		margin: 0;
+		accent-color: var(--accent);
+	}
+
+	.goals-pop .replace {
+		padding-top: 10px;
+		border-top: 1px solid var(--border);
+		color: var(--muted);
+		font-size: 13px;
+	}
+
+	.pop-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 8px;
+		margin-top: 4px;
+	}
+
+	.pop-actions button {
+		padding: 8px 16px;
+		font-weight: 600;
+	}
+
+	.tool-message {
+		color: var(--ok);
+		font-size: 13px;
+		font-weight: 600;
 	}
 
 	.main {
@@ -428,8 +793,10 @@
 
 	h2 {
 		margin-bottom: 4px;
-		font-size: 36px;
+		font-size: calc(42px * var(--scale, 1));
+		font-weight: 800;
 		line-height: 1.15;
+		letter-spacing: -0.01em;
 	}
 
 	.empty {
@@ -438,9 +805,16 @@
 	}
 
 	.content {
-		font-size: 19px;
+		font-size: calc(20px * var(--scale, 1));
 		line-height: 1.5;
 		overflow-wrap: anywhere;
+	}
+
+	/* Anzeige: Spalte bis zum Kartenende, damit die Links unten stehen können. */
+	.content:not(.editable) {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
 	}
 
 	.content :global(:first-child) {
@@ -475,10 +849,10 @@
 	.content :global(ol > li) {
 		position: relative;
 		margin: 0;
-		padding: 8px 0 8px 50px;
+		padding: 9px 0 9px calc(58px * var(--scale, 1));
 		border-bottom: 1px solid var(--border);
-		font-size: 23px;
-		font-weight: 500;
+		font-size: calc(29px * var(--scale, 1));
+		font-weight: 600;
 		line-height: 1.3;
 		counter-increment: step;
 	}
@@ -490,16 +864,16 @@
 	.content :global(ol > li::before) {
 		content: counter(step);
 		position: absolute;
-		top: 8px;
+		top: calc(9px + 2px * var(--scale, 1));
 		left: 0;
 		display: grid;
 		place-items: center;
-		width: 34px;
-		height: 34px;
+		width: calc(40px * var(--scale, 1));
+		height: calc(40px * var(--scale, 1));
 		border-radius: 50%;
-		background: var(--track);
-		color: var(--lesson-accent);
-		font-size: 16px;
+		background: var(--accent-soft);
+		color: var(--accent);
+		font-size: calc(18px * var(--scale, 1));
 		font-weight: 700;
 	}
 
@@ -507,7 +881,7 @@
 		display: block;
 		margin-top: 2px;
 		color: var(--muted);
-		font-size: 16px;
+		font-size: calc(17px * var(--scale, 1));
 		font-weight: 400;
 	}
 
@@ -516,17 +890,35 @@
 		margin: 1em 0 0.4em;
 	}
 
+	/* Links klein und unterstrichen, nur die Adresse ohne https:// (siehe steps). */
 	.content :global(a) {
-		color: var(--lesson-accent);
-		text-decoration: none;
+		color: var(--accent);
+		font-size: calc(17px * var(--scale, 1));
+		text-decoration: underline;
+		text-underline-offset: 3px;
 	}
 
 	.content :global(a:hover) {
-		text-decoration: underline;
+		text-decoration-thickness: 2px;
 	}
 
 	.content :global(a::before) {
 		content: '🔗 ';
+		display: inline-block;
+		text-decoration: none;
+	}
+
+	/* Absätze, die nur Links enthalten, stehen gesammelt unten in der Karte. */
+	.content :global(.links) {
+		margin-top: auto;
+		padding-top: 16px;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.content :global(.links > *) {
+		margin: 0;
 	}
 
 	.media {
@@ -573,10 +965,6 @@
 	.media.multi .add-image,
 	.media.multi .help {
 		grid-column: 1 / -1;
-	}
-
-	.caption {
-		text-align: center;
 	}
 
 	.remove {
@@ -790,6 +1178,14 @@
 		.editing .media {
 			max-height: none;
 			padding: 0;
+		}
+
+		.assignment:not(.editing) .media {
+			grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+		}
+
+		.assignment:not(.editing) .media .thumb:only-of-type {
+			grid-column: auto;
 		}
 
 		.media .zoom-btn img {

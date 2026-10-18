@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { api } from '#lib/api.js';
+	import { ask } from '#lib/dialog.svelte.js';
 	import { clock } from '#lib/clock.svelte.js';
 	import { autoRefresh } from '#lib/refresh.js';
 	import { atToday, pad } from '#lib/time.js';
@@ -85,8 +86,8 @@
 		run(() => api('/api/test', 'PUT', { start: test.start, end }));
 	}
 
-	function stop() {
-		if (!confirm('Test beenden?')) return;
+	async function stop() {
+		if (!(await ask({ title: 'Test beenden?', message: 'Die Anzeige wird zurückgesetzt.', confirmLabel: 'Beenden', danger: true }))) return;
 		run(() => api('/api/test', 'DELETE'));
 	}
 

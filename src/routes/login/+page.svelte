@@ -1,13 +1,17 @@
 <script>
 	import logo from '#lib/assets/logo.svg';
 
-	let { form } = $props();
+	let { data, form } = $props();
+
+	const REPO = 'https://github.com/seals187/classRoom';
 </script>
 
 <svelte:head>
 	<title>Anmelden · classRoom</title>
 </svelte:head>
 
+<!-- Karte senkrecht und waagrecht mittig, darunter App-Name, Version, Fehler melden und Lizenz. -->
+<div class="page">
 <section class="card login">
 	<div class="brand">
 		<img src={logo} alt="" width="72" height="72" />
@@ -37,10 +41,53 @@
 	</form>
 </section>
 
+<footer>
+	<p><strong>class<span class="r">R</span>oom</strong> · Version {data.version} · <a href="{REPO}/issues" target="_blank" rel="noopener">Fehler melden</a></p>
+	<p>© {data.years} Julien Kühne · <a href="{REPO}/blob/main/LICENSE" target="_blank" rel="noopener">Lizenz AGPL-3.0</a></p>
+</footer>
+</div>
+
 <style>
+	.page {
+		min-height: calc(100dvh - 24px);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 20px;
+		padding: 24px 0;
+	}
+
+	footer {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		color: var(--muted);
+		font-size: 0.82rem;
+		text-align: center;
+	}
+
+	footer p {
+		margin: 0;
+	}
+
+	footer strong {
+		color: var(--text);
+	}
+
+	footer a {
+		color: var(--muted);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+
+	footer a:hover {
+		color: var(--accent);
+	}
+
 	.login {
+		width: 100%;
 		max-width: 380px;
-		margin: 12vh auto 0;
 		display: flex;
 		flex-direction: column;
 		gap: 6px;

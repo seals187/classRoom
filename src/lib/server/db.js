@@ -53,6 +53,12 @@ CREATE TABLE IF NOT EXISTS files (
 	data BLOB NOT NULL,
 	created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS backgrounds (
+	id INTEGER PRIMARY KEY,
+	file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+	student_id INTEGER REFERENCES students(id) ON DELETE CASCADE,
+	created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 `;
 
 /** @param {import('better-sqlite3').Database} db */
@@ -71,6 +77,10 @@ function migrate(db) {
 		if (!studentColumns.some((c) => c.name === `last_check_${kind}`)) {
 			db.exec(`ALTER TABLE students ADD COLUMN last_check_${kind} INTEGER`);
 		}
+	}
+	// Selbst gewählter Hintergrund (siehe backgrounds.js), wenn die Lehrkraft das erlaubt.
+	if (!studentColumns.some((c) => c.name === 'background')) {
+		db.exec("ALTER TABLE students ADD COLUMN background TEXT NOT NULL DEFAULT ''");
 	}
 
 	const assignmentColumns = /** @type {{ name: string }[]} */ (db.prepare('PRAGMA table_info(assignment)').all());
@@ -333,8 +343,11 @@ export function listStudents(kind = 'self') {
 		byId.get(g.studentId)?.goals.push({ id: g.id, text: g.text, done: g.done === 1 });
 		if (g.createdAt !== null) firstGoal.set(g.studentId, Math.min(firstGoal.get(g.studentId) ?? g.createdAt, g.createdAt));
 	}
-	// Noch nie abgehakt → ab dem ersten Ziel zählen.
-	for (const s of byId.values()) s.activeAt ??= firstGoal.get(s.id) ?? null;
+	// Ab dem letzten Abhaken zählen – noch nie (oder zuletzt vor den jetzigen Zielen) → ab dem ersten Ziel.
+	for (const s of byId.values()) {
+		const first = firstGoal.get(s.id) ?? null;
+		s.activeAt = s.activeAt === null || (first !== null && first > s.activeAt) ? first : s.activeAt;
+	}
 	return [...byId.values()];
 }
 
@@ -481,11 +494,45 @@ export function addGoal(studentId, input) {
 }
 
 /**
+ * Dieselben Ziele allen Schülern geben (z. B. die Schritte des Auftrags als Stundenziele).
+ * Ziele, die ein Schüler mit gleichem Text schon hat, werden übersprungen.
+ * @param {unknown} texts
+ * @param {unknown} kind
+ * @param {boolean} [replace] vorher alle Ziele dieser Art löschen
+ */
+export function addGoalsToAll(texts, kind, replace = false) {
+	if (!Array.isArray(texts) || texts.length === 0 || texts.length > 30) error(400, 'Keine Ziele angegeben');
+	const list = [...new Set(texts.map((t) => requiredText(t, 'Ziel', 200)))];
+	const k = goalKind(kind);
+	const db = getDb();
+	const students = /** @type {{ id: number }[]} */ (db.prepare('SELECT id FROM students').all());
+	const exists = db.prepare('SELECT 1 FROM goals WHERE student_id = ? AND kind = ? AND text = ?');
+	let added = 0;
+	db.transaction(() => {
+		if (replace) clearGoals(k);
+		for (const { id } of students) {
+			for (const text of list) {
+				if (exists.get(id, k, text)) continue;
+				addGoal(id, { text, kind: k });
+				added++;
+			}
+		}
+	})();
+	return { added, students: students.length };
+}
+
+/**
  * Alle Ziele einer Art löschen (z. B. Stundenziele für eine neue Stunde).
  * @param {unknown} kind
  */
 export function clearGoals(kind) {
-	const { changes } = getDb().prepare('DELETE FROM goals WHERE kind = ?').run(goalKind(kind));
+	const db = getDb();
+	const k = goalKind(kind);
+	const { changes } = db.transaction(() => {
+		// Neue Stunde → die Zeit seit dem letzten Abhaken beginnt neu.
+		db.prepare(`UPDATE students SET last_check_${k} = NULL`).run();
+		return db.prepare('DELETE FROM goals WHERE kind = ?').run(k);
+	})();
 	return { deleted: changes };
 }
 

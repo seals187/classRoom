@@ -25,8 +25,9 @@ export function getAssignment() {
 		getDb().prepare('SELECT title, body, images, format, updated_at AS updatedAt FROM assignment WHERE id = 1').get()
 	);
 	if (!row) return { title: '', html: '', images: [], updatedAt: null };
-	// Aufträge von vor dem Editor sind noch Markdown.
-	const html = row.format === 'html' ? row.body : cleanHtml(renderMarkdown(row.body));
+	// Aufträge von vor dem Editor sind noch Markdown. Auch gespeichertes HTML erneut bereinigen –
+	// so verschwinden z. B. weiße Schriftfarben aus älteren Aufträgen.
+	const html = cleanHtml(row.format === 'html' ? row.body : renderMarkdown(row.body));
 	return { title: row.title, html, images: parseIds(row.images), updatedAt: row.updatedAt };
 }
 

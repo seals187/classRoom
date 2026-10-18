@@ -1,5 +1,6 @@
 import { getConfig } from '#lib/server/config.js';
 import { getNoiseSettings, getSettings } from '#lib/server/db.js';
+import { getBackground } from '#lib/server/backgrounds.js';
 
 export function load({ locals }) {
 	if (!locals.user) return { user: null };
@@ -8,6 +9,8 @@ export function load({ locals }) {
 		user: locals.user,
 		settings: getSettings(),
 		warnMinutes: config.warnMinutes,
+		lessonDurations: config.lessonDurations,
+		background: getBackground(locals.user),
 		goalsCollapsed: config.goalsCollapsed,
 		// Lehrkräfte messen (Mikrofon am Beamer-Gerät), Schüler sehen nur die Farbe.
 		noise:

@@ -2,23 +2,43 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
-## [Unveröffentlicht]
+## [0.3.0] – 2026-10-18
+
+Große Überarbeitung: neues Kopfband, Auftrag und Ziel-Seiten neu gestaltet, Hintergründe, eigene Dialoge.
 
 ### Neu
-- **Neues Kopfband auf allen Seiten:** Menü-Knopf ☰, Zeitbalken (vorbei / noch …), Digitaluhr und kleine Ampel – ersetzt Zahnrad-Leiste, große Analoguhr und die alten Balken
-- **Menü auch für Schüler** (☰): ihre Seiten, Hell/Dunkel und Abmelden
-- **Auftrag neu gestaltet:** großer Titel, nummerierte Liste als Schritte mit grauer Zusatzzeile (Umschalt+Enter), Bilder rechts mit „Klick vergrößert“, dezente Bearbeiten/Löschen-Knöpfe
-- **Stundenziele-Leiste** unter dem Auftrag: ein Punkt pro Schüler, Fortschritt und „Öffnen“
-- **Stundenziele und Selbstlernen neu gestaltet** – ruhig, 20–30 Schüler ohne Scrollen auf 1280×720
-  - Kopfband mit Zeitbalken (vorbei / noch …), Klassen-Fortschritt, Digitaluhr und kleiner Ampel (Klick startet/stoppt)
-  - Kompaktes Raster; aufgeklappte Kacheln werden nach unten länger, die anderen rücken nach
-  - Sortierung: Name oder Fortschritt (Stundenziele), „zuletzt aktiv“ oder Name (Selbstlernen)
-  - Selbstlernen: aktuelles Ziel und Zeit seit dem letzten Abhaken; nach 15 min ohne Abhaken orange markiert
-  - Eigene Akzentfarbe je Seite (Blau / Lila), Grün für fertig; hell und dunkel
-- Datenbank merkt sich pro Schüler den Zeitpunkt des letzten Abhakens (Migration läuft automatisch)
+- **Kopfband auf allen Seiten:** Menü-Knopf ☰, Zeitbalken, Digitaluhr und kleine Ampel – ersetzt Zahnrad-Leiste, große Analoguhr und die alten Balken
+  - Zeitbalken mit drei Phasen: *Arbeitsphase* (blau) → *Bald Rückkehr – aufräumen* (orange) → *Zurück ins Klassenzimmer* (rot, „Zeit um · +2 min“); Restzeit groß, Viertelstunden-Striche mit Uhrzeit, Jetzt-Strich
+  - **Stunde mit einem Klick starten:** „▶ Jetzt starten · 45 min“, „90 min“ oder „Andere…“; Dauern über `LESSON_DURATIONS`
+- **Menü auch für Schüler:** ihre Seiten, Hintergrund, Hell/Dunkel und Abmelden
+- **Auftrag neu gestaltet:** großer Titel, nummerierte Liste als Schritte (Umschalt+Enter für eine graue Zusatzzeile), Bilder rechts gleich zugeschnitten mit „Bild 1, 2 …“ – ein Klick zeigt das ganze Bild, Links klein unten in der Karte
+  - Werkzeuge: **☑ Als Stundenziele** (Schritte auswählen, optional bisherige ersetzen, für alle Schüler anlegen), **A− / A+** für die Schriftgröße, ✎ Bearbeiten, Vollbild
+  - Leiste **Stundenziele** darunter: ein Quadrat pro Schüler, je mehr erledigt, desto grüner; sind alle fertig: „🎉 Alle Ziele erledigt“
+- **Stundenziele und Selbstlernen neu gestaltet** – ruhig, 20–30 Schüler ohne Scrollen auf 1280×720, mit Klassen-Fortschritt im Kopfband
+  - Kacheln in festen Spalten, Reihenfolge nach Vorname; Aufklappen schiebt nur die Kacheln darunter nach unten
+  - Nach 15 min ohne Abhaken wird eine Kachel orange (Selbstlernen mit aktuellem Ziel und Zeit, Stundenziele mit der Zeit neben dem Balken)
+  - **„Nur meine Kachel“** für Schüler: blendet die anderen Kacheln aus; Kopfband und Klassen-Fortschritt bleiben
+  - Eigene Akzentfarbe je Seite (Blau / Lila)
+- **Hintergründe** für Auftrag, Stundenziele und Selbstlernen: 25 Farbverläufe, 26 selbst gezeichnete Muster, 18 Fotos (Pexels) oder eigene Bilder; die Lehrkraft legt ihn für alle fest oder lässt die Schüler selbst wählen
+- **Bilder werden vor dem Hochladen im Browser verkleinert** (höchstens 1920 px, einige hundert KB) – auch große Handyfotos klappen
+- **Eigene Dialoge statt Browser-Fenstern** (Löschen, neues Passwort, neue Stunde, Test beenden, Link einfügen, Fehlermeldungen); Enter bestätigt, Esc bricht ab
+- **Login-Seite:** Karte mittig, darunter Version, „Fehler melden“, © und Lizenz
+- Neue `.env`-Variable `LESSON_DURATIONS` (Standard `45,90`)
 
 ### Geändert
-- Ampel-Einstellungen: „Ampel neben der Uhr anzeigen“ statt „unter der Uhr“
+- Heller Modus überarbeitet: helle Ampel, Zeitbalken mit weißen Strichen, farbige Phase, Karten mit leichtem Schatten
+- Mehr Seitenrand auf großen Bildschirmen
+- Sortierung der Kacheln entfernt (feste Reihenfolge nach Vorname)
+- Option „Menü-Knopf ausblenden“ entfernt – der Knopf ist immer sichtbar
+- „Auftrag löschen“ jetzt im Bearbeiten-Modus
+- README neu gestaltet, Installation in drei Schritten
+
+### Behoben
+- Fast weiße oder fast schwarze Schriftfarben im Auftrag (z. B. aus dem Dunkelmodus eingefügt) werden entfernt – vorher war der Text im hellen Modus unsichtbar
+- „Neue Stunde“ setzt die Zeit seit dem letzten Abhaken zurück
+
+### Datenbank
+- Neue Spalten und die Tabelle `backgrounds` werden beim Start automatisch angelegt; bestehende Daten bleiben erhalten
 
 ## [0.2.3] – 2026-10-18
 
@@ -78,6 +98,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.3.0]: https://github.com/seals187/classRoom/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/seals187/classRoom/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/seals187/classRoom/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/seals187/classRoom/compare/v0.2.0...v0.2.1

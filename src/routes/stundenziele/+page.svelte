@@ -1,6 +1,7 @@
 <script>
 	import { invalidateAll } from '$app/navigation';
 	import { api } from '#lib/api.js';
+	import { ask, showError } from '#lib/dialog.svelte.js';
 	import GoalBoard from '#lib/components/GoalBoard.svelte';
 
 	let { data } = $props();
@@ -8,16 +9,18 @@
 	const isTeacher = $derived(data.user?.role === 'teacher');
 
 	async function newLesson() {
-		if (
-			!confirm(
-				'Neue Stunde beginnen?\n\nAlle Stundenziele aller Schüler werden gelöscht, damit die Klasse mit leeren Kacheln startet.\nSelbstlern-Ziele und der Auftrag bleiben erhalten.'
-			)
-		)
-			return;
+		const ok = await ask({
+			title: 'Neue Stunde beginnen?',
+			message:
+				'Alle Stundenziele aller Schüler werden gelöscht, damit die Klasse mit leeren Kacheln startet.\nSelbstlern-Ziele und der Auftrag bleiben erhalten.',
+			confirmLabel: 'Stundenziele löschen',
+			danger: true
+		});
+		if (!ok) return;
 		try {
 			await api('/api/goals?kind=lesson', 'DELETE');
 		} catch (err) {
-			alert(err instanceof Error ? err.message : String(err));
+			showError(err);
 		}
 		await invalidateAll();
 	}

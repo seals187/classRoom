@@ -2,6 +2,7 @@
 	import PageTitle from '#lib/components/PageTitle.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { api } from '#lib/api.js';
+	import { ask } from '#lib/dialog.svelte.js';
 	import CopyButton from '#lib/components/CopyButton.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import { autoRefresh } from '#lib/refresh.js';
@@ -94,9 +95,17 @@
 	}
 
 	/** @param {import('#lib/server/db.js').Student} student */
-	function resetPassword(student) {
+	async function resetPassword(student) {
 		const hasLogin = !!student.username;
-		if (hasLogin && !confirm(`Neues Passwort für ${student.firstName} ${student.lastName} erzeugen? Das alte gilt dann nicht mehr.`)) return;
+		if (
+			hasLogin &&
+			!(await ask({
+				title: `Neues Passwort für ${student.firstName} ${student.lastName}?`,
+				message: 'Das alte Passwort gilt danach nicht mehr, und der Schüler wird überall abgemeldet.',
+				confirmLabel: 'Neues Passwort erzeugen'
+			}))
+		)
+			return;
 		run(async () => {
 			const result = await api(`/api/students/${student.id}/password`, 'POST');
 			credentials = { name: `${student.firstName} ${student.lastName}`, ...result };
@@ -104,8 +113,14 @@
 	}
 
 	/** @param {import('#lib/server/db.js').Student} student */
-	function remove(student) {
-		if (!confirm(`${student.firstName} ${student.lastName} wirklich löschen? Zugang und alle Ziele gehen dabei verloren.`)) return;
+	async function remove(student) {
+		const ok = await ask({
+			title: `${student.firstName} ${student.lastName} löschen?`,
+			message: 'Zugang und alle Ziele gehen dabei verloren.',
+			confirmLabel: 'Löschen',
+			danger: true
+		});
+		if (!ok) return;
 		run(() => api(`/api/students/${student.id}`, 'DELETE'));
 	}
 </script>
