@@ -155,5 +155,6 @@ npm run build && npm start   # Produktionsbuild
 
 ## Releases & Updates
 
-- **Release erstellen:** Version in `package.json` anheben, committen und einen Tag pushen, z. B. `git tag v0.2.2 && git push origin v0.2.2`. GitHub Actions baut dann das Docker-Image, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release an.
+- **Änderungen** pro Version stehen im [CHANGELOG](CHANGELOG.md).
+- **Release erstellen:** Version in `package.json` anheben, Abschnitt in `CHANGELOG.md` ergänzen, committen und einen Tag pushen, z. B. `git tag v0.2.2 && git push origin v0.2.2`. GitHub Actions baut dann das Docker-Image, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release mit dem Text aus dem CHANGELOG an.
 - **Abhängigkeiten:** Dependabot prüft wöchentlich npm-Pakete, das Docker-Basis-Image und die GitHub Actions und öffnet bei Updates Pull Requests.

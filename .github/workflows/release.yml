@@ -53,16 +53,30 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Abschnitt der Version aus CHANGELOG.md plus Installationshinweis als Release-Text
+      - name: Release-Notizen aus CHANGELOG.md
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          awk -v v="$VERSION" '
+            index($0, "## [" v "]") == 1 { found = 1; next }
+            found && (/^## \[/ || /^\[[0-9]/) { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          cat >> notes.md <<EOF
+
+          ## Docker-Image
+
+          \`\`\`bash
+          docker pull ${IMAGE}:${VERSION}
+          \`\`\`
+
+          Installation mit Docker Compose: siehe [README](https://github.com/${GITHUB_REPOSITORY}#installation-mit-docker-image) · alle Versionen im [CHANGELOG](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md).
+          EOF
+
       - name: GitHub-Release anlegen
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
-          body: |
-            ## Docker-Image
-
-            ```bash
-            docker pull ${{ env.IMAGE }}:${{ steps.meta.outputs.version }}
-            ```
-
-            Installation mit Docker Compose: siehe [README](https://github.com/${{ github.repository }}#installation-mit-docker-image).
+          body_path: notes.md
