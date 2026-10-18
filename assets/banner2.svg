@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <title>classRoom – Werkzeugkasten für den Unterricht</title>
+  <rect width="1280" height="640" fill="#FFF6EC"/>
+  <circle cx="1180" cy="80" r="140" fill="#F5B83D" opacity="0.18"/>
+  <circle cx="1240" cy="600" r="200" fill="#8A5CD6" opacity="0.10"/>
+  <circle cx="40" cy="620" r="120" fill="#3B6FE0" opacity="0.10"/>
+
+  <g transform="translate(110,140) scale(2.75)">
+    <g transform="rotate(-7 40 40)">
+      <rect x="18" y="18" width="44" height="44" rx="10" fill="#3B6FE0"/>
+      <circle cx="40" cy="40" r="13" fill="none" stroke="#FFFFFF" stroke-width="3.5"/>
+      <path d="M40 40 V31 M40 40 L47 44" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+    </g>
+    <g transform="rotate(6 90 40)">
+      <rect x="68" y="18" width="44" height="44" rx="10" fill="#F08A3C"/>
+      <circle cx="80" cy="30" r="4" fill="#FFFFFF"/>
+      <circle cx="90" cy="40" r="4" fill="#FFFFFF"/>
+      <circle cx="100" cy="50" r="4" fill="#FFFFFF"/>
+    </g>
+    <g transform="rotate(5 40 90)">
+      <rect x="18" y="68" width="44" height="44" rx="10" fill="#8A5CD6"/>
+      <path d="M24 106 V99 H34 V92 H44 V85 H56 V106 Z" fill="#FFFFFF"/>
+      <polygon points="50,66 52.2,71 57.5,71.3 53.4,74.6 54.8,79.8 50,77 45.2,79.8 46.6,74.6 42.5,71.3 47.8,71" fill="#F5B83D"/>
+    </g>
+    <g transform="rotate(-6 90 90)">
+      <rect x="68" y="68" width="44" height="44" rx="10" fill="#2FA36B"/>
+      <rect x="82" y="73" width="16" height="34" rx="5" fill="#1F2A24"/>
+      <circle cx="90" cy="80" r="4" fill="#E5484D"/>
+      <circle cx="90" cy="90" r="4" fill="#F5B83D"/>
+      <circle cx="90" cy="100" r="4" fill="#4CD38A"/>
+    </g>
+  </g>
+
+  <g font-family="Nunito, Poppins, 'Segoe UI', Arial, sans-serif">
+    <text x="560" y="275" font-size="104" font-weight="800" fill="#1F2433">class<tspan fill="#F08A3C">R</tspan>oom</text>
+    <text x="564" y="335" font-size="36" font-weight="600" fill="#4A5068">Der Werkzeugkasten für den Unterricht</text>
+
+    <g font-size="24" font-weight="700" fill="#FFFFFF">
+      <rect x="564" y="385" width="110" height="46" rx="23" fill="#3B6FE0"/>
+      <text x="619" y="416" text-anchor="middle">Timer</text>
+      <rect x="686" y="385" width="122" height="46" rx="23" fill="#F08A3C"/>
+      <text x="747" y="416" text-anchor="middle">Zufall</text>
+      <rect x="820" y="385" width="148" height="46" rx="23" fill="#8A5CD6"/>
+      <text x="894" y="416" text-anchor="middle">Lernziele</text>
+      <rect x="980" y="385" width="170" height="46" rx="23" fill="#2FA36B"/>
+      <text x="1065" y="416" text-anchor="middle">Laut-Ampel</text>
+    </g>
+
+    <text x="564" y="480" font-size="24" font-weight="700" fill="#4A5068">Für Lehrer und Schüler · Klassen einfach verwalten</text>
+    <g font-size="22" font-weight="700" fill="#1F2433">
+      <rect x="564" y="502" width="230" height="42" rx="12" fill="#FFFFFF" stroke="#E3D7C6" stroke-width="2"/>
+      <text x="679" y="530" text-anchor="middle">🪶 Leichtgewichtig</text>
+      <rect x="808" y="502" width="204" height="42" rx="12" fill="#FFFFFF" stroke="#E3D7C6" stroke-width="2"/>
+      <text x="910" y="530" text-anchor="middle">🐳 Docker-ready</text>
+      <rect x="1026" y="502" width="190" height="42" rx="12" fill="#FFFFFF" stroke="#E3D7C6" stroke-width="2"/>
+      <text x="1121" y="530" text-anchor="middle">🔒 Self-hosted</text>
+    </g>
+  </g>
+</svg>

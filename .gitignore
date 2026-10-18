@@ -9,6 +9,10 @@ out/
 .nuxt/
 .cache/
 coverage/
+.svelte-kit/
+
+# SQLite-Datenbank (lokal)
+data/
 
 # Environment
 .env

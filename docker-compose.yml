@@ -1,0 +1,18 @@
+services:
+  classroom:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Im Container fest – der Host-Port kommt aus PORT in der .env.
+      PORT: 3000
+      DATABASE_PATH: /app/data/classroom.db
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - classroom-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  classroom-data:
