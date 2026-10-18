@@ -26,6 +26,10 @@
 		<path d="M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2" />
 	{:else if name === 'pencil'}
 		<path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+	{:else if name === 'menu'}
+		<path d="M4 6h16" />
+		<path d="M4 12h16" />
+		<path d="M4 18h16" />
 	{:else if name === 'close'}
 		<path d="M18 6 6 18" />
 		<path d="m6 6 12 12" />

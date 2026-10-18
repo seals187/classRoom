@@ -6,24 +6,21 @@ Ein Werkzeugkasten für Lehrerinnen und Lehrer: verschiedene kleine Tools, die s
 
 ## Funktionen
 
-### Kopfzeile
+### Kopfband (alle Seiten)
 
-- **Zahnrad-Menü** oben links, zusammen mit dem Logo in einer Leiste – lässt sich ausblenden (erscheint beim Darüberfahren)
-- **Zeit-Balken** in der Mitte:
-  - *abgelaufene Zeit* seit Beginn der Stunde (mit Sanduhr)
-  - *Klassenraum · zurück um HH:MM* – orange kurz vor der Rückkehr, rot wenn die Zeit um ist
-- **Große analoge Uhr** mit Wochentag und Datum (dd/mm/yyyy), gut lesbar am Beamer
-- **Lautstärke-Ampel** (senkrecht, mit der Uhr in einer Karte) – zeigt über das Mikrofon Grün/Gelb/Rot je nach Lautstärke im Raum
-- Auf den Verwaltungsseiten werden Balken, Uhr und Ampel ausgeblendet
+- **Menü-Knopf ☰** oben links – für Lehrkräfte mit allen Einstellungen, für Schüler mit ihren Seiten, Darstellung und Abmelden; lässt sich ausblenden (erscheint beim Darüberfahren)
+- **Zeitbalken:** „27 min vorbei“ und „noch 18 min“ bis zur Rückkehr – orange kurz vor Schluss, rot wenn die Zeit um ist
+- **Digitaluhr** mit Wochentag und Datum, gut lesbar am Beamer
+- **Lautstärke-Ampel** – zeigt über das Mikrofon Grün/Gelb/Rot; Klick startet/stoppt die Messung
+- Auf den Verwaltungsseiten nur Menü-Knopf und Logo
 
 ### Auftrag (Startseite)
 
-- Box für den aktuellen Auftrag mit Titel, formatiertem Text, Links und Bildern
-- Bilder links als kleine Vorschau, mehrere Bilder als kompaktes Raster – Klick zeigt das Bild in voller Größe; Auftragstext rechts daneben
-- Editor mit Werkzeugleiste: **fett**, *kursiv*, unterstrichen, Aufzählung, nummerierte Liste, Textfarbe, Link, Bild (auch per Strg+V oder Hineinziehen)
-- Kompakter Bearbeitungsmodus: Uhr, Balken und Ampel werden ausgeblendet, damit der Editor ohne Scrollen Platz hat
+- Großer Titel, Text mit Formatierung, Links und Bildern; Bilder rechts als Vorschau („Klick vergrößert“)
+- **Nummerierte Schritte:** eine nummerierte Liste erscheint als Schritte mit Zahl im Kreis – mit **Umschalt+Enter** bekommt ein Schritt eine graue Zusatzzeile
+- Editor mit Werkzeugleiste: **fett**, *kursiv*, unterstrichen, Aufzählung, Schritte, Textfarbe, Link, Bild (auch per Strg+V oder Hineinziehen)
 - Auftrag bearbeiten oder löschen; das HTML wird beim Speichern serverseitig bereinigt
-- Button **Stundenziele** direkt unter dem Auftrag
+- Leiste **Stundenziele** darunter: ein Punkt pro Schüler (grün fertig, blau begonnen), „45/96 Ziele · 3 fertig“ und Knopf **Öffnen**
 
 ### Stundenziele & Selbstlern-Modus
 

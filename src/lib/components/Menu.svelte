@@ -6,20 +6,23 @@
 	import Icon from './Icon.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 	import { NAV } from '#lib/nav.js';
+	import logo from '#lib/assets/logo.svg';
 	import { noise, setNoiseConfig, startNoise, stopNoise } from '#lib/noise.svelte.js';
 
 	/**
 	 * @type {{
 	 *   open: boolean,
-	 *   gearAutoHide: boolean,
+	 *   autoHide: boolean,
 	 *   settings: { roomName: string, startTime: string, returnTime: string },
 	 *   user: import('#lib/server/auth.js').User,
 	 *   noiseSettings: import('#lib/server/db.js').NoiseSettings | null
 	 * }}
 	 */
-	let { open = $bindable(false), gearAutoHide = $bindable(false), settings, user, noiseSettings } = $props();
+	let { open = $bindable(false), autoHide = $bindable(false), settings, user, noiseSettings } = $props();
 
-	const links = NAV;
+	const isTeacher = $derived(user.role === 'teacher');
+	// Schüler sehen nur ihre Seiten, Darstellung und Abmelden.
+	const links = $derived(isTeacher ? NAV : NAV.filter((item) => !item.teacherOnly));
 
 	let form = $state({ roomName: '', startTime: '', returnTime: '' });
 	let saving = $state(false);
@@ -92,9 +95,9 @@
 		run(() => api('/api/settings', 'PUT', form), 'Zeiten zurückgesetzt');
 	}
 
-	function persistGear() {
+	function persistAutoHide() {
 		try {
-			localStorage.setItem('gearAutoHide', gearAutoHide ? '1' : '0');
+			localStorage.setItem('gearAutoHide', autoHide ? '1' : '0');
 		} catch {
 			// Ignorieren – gilt dann nur bis zum Neuladen.
 		}
@@ -108,7 +111,7 @@
 
 	<aside class="drawer" aria-label="Menü">
 		<div class="drawer-head">
-			<h2>Menü</h2>
+			<h2 class="brand"><img src={logo} alt="" width="28" height="28" /><span>class<span class="r">R</span>oom</span></h2>
 			<button class="icon-btn" aria-label="Menü schließen" onclick={() => (open = false)}>
 				<Icon name="close" size={18} />
 			</button>
@@ -127,6 +130,7 @@
 			{/each}
 		</nav>
 
+		{#if isTeacher}
 		<form onsubmit={save}>
 			<h3>Unterrichtsstunde</h3>
 			<label class="field">
@@ -154,6 +158,7 @@
 			</div>
 			{#if message}<p class="message">{message}</p>{/if}
 		</form>
+		{/if}
 
 		{#if noiseSettings}
 			<details class="noise">
@@ -206,8 +211,8 @@
 		{/if}
 
 		<label class="check">
-			<input type="checkbox" bind:checked={gearAutoHide} onchange={persistGear} />
-			Zahnrad ausblenden (erscheint beim Darüberfahren)
+			<input type="checkbox" bind:checked={autoHide} onchange={persistAutoHide} />
+			Menü-Knopf ausblenden (erscheint beim Darüberfahren)
 		</label>
 
 		<div class="theme">
@@ -216,7 +221,7 @@
 		</div>
 
 		<form class="logout" method="POST" action="/logout">
-			<span>Angemeldet als <strong>{user.username}</strong></span>
+			<span>Angemeldet als <strong>{isTeacher ? user.username : user.displayName}</strong></span>
 			<button type="submit">Abmelden</button>
 		</form>
 	</aside>
@@ -257,6 +262,23 @@
 
 	.drawer-head h2 {
 		font-size: 1.15rem;
+	}
+
+	.brand {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		font-weight: 800;
+	}
+
+	.brand img {
+		margin-right: 2px;
+		border-radius: 7px;
+	}
+
+	/* Wie im Banner: das „R“ in Orange. */
+	.brand .r {
+		color: #f08a3c;
 	}
 
 	nav {

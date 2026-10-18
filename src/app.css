@@ -84,6 +84,8 @@
 body {
 	margin: 0;
 	min-height: 100vh;
+	/* Eigener Block-Kontext: der Rand des Kopfbands ragt sonst über den Body hinaus (Scrollbalken). */
+	display: flow-root;
 	background: var(--bg);
 }
 
@@ -93,7 +95,7 @@ body {
 }
 
 main {
-	padding: 0 var(--gutter) 32px;
+	padding: 0 var(--gutter) 24px;
 }
 
 @media (max-width: 640px) {

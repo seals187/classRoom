@@ -5,6 +5,10 @@ Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioni
 ## [Unveröffentlicht]
 
 ### Neu
+- **Neues Kopfband auf allen Seiten:** Menü-Knopf ☰, Zeitbalken (vorbei / noch …), Digitaluhr und kleine Ampel – ersetzt Zahnrad-Leiste, große Analoguhr und die alten Balken
+- **Menü auch für Schüler** (☰): ihre Seiten, Hell/Dunkel und Abmelden
+- **Auftrag neu gestaltet:** großer Titel, nummerierte Liste als Schritte mit grauer Zusatzzeile (Umschalt+Enter), Bilder rechts mit „Klick vergrößert“, dezente Bearbeiten/Löschen-Knöpfe
+- **Stundenziele-Leiste** unter dem Auftrag: ein Punkt pro Schüler, Fortschritt und „Öffnen“
 - **Stundenziele und Selbstlernen neu gestaltet** – ruhig, 20–30 Schüler ohne Scrollen auf 1280×720
   - Kopfband mit Zeitbalken (vorbei / noch …), Klassen-Fortschritt, Digitaluhr und kleiner Ampel (Klick startet/stoppt)
   - Kompaktes Raster; aufgeklappte Kacheln werden nach unten länger, die anderen rücken nach

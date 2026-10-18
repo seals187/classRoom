@@ -3,7 +3,6 @@
 	import { ui } from '#lib/ui.svelte.js';
 	import { invalidateAll } from '$app/navigation';
 	import { api } from '#lib/api.js';
-	import { navIcon } from '#lib/nav.js';
 	import Icon from './Icon.svelte';
 
 	/** @type {{ assignment: import('#lib/server/assignment.js').Assignment, canEdit: boolean }} */
@@ -38,7 +37,7 @@
 	/** @type {Range | null} */
 	let lastRange = null;
 
-	// Beim Bearbeiten Platz schaffen: Kopfzeile ohne Balken/Uhr/Ampel (siehe Header).
+	// Beim Bearbeiten Platz schaffen: Startseite blendet die Stundenziel-Leiste aus.
 	$effect(() => {
 		ui.focus = editing;
 		return () => {
@@ -193,144 +192,165 @@
 		e.preventDefault();
 		upload(files);
 	}
+
+	/**
+	 * Schritte der nummerierten Liste: Text nach dem ersten Zeilenumbruch (Umschalt+Enter)
+	 * als graue Zusatzzeile anzeigen. Nur fürs Anzeigen – gespeichert bleibt das HTML unverändert.
+	 * @param {HTMLElement} node
+	 * @param {string} _html neu anwenden, wenn sich der Auftrag ändert
+	 */
+	function steps(node, _html) {
+		function apply() {
+			for (const li of node.querySelectorAll(':scope > ol > li')) {
+				if (li.querySelector(':scope > .sub')) continue;
+				const br = [...li.childNodes].find((n) => n.nodeName === 'BR');
+				if (!br?.nextSibling) continue;
+				const sub = document.createElement('span');
+				sub.className = 'sub';
+				while (br.nextSibling) sub.appendChild(br.nextSibling);
+				br.replaceWith(sub);
+			}
+		}
+		apply();
+		return { update: apply };
+	}
 </script>
 
 <svelte:document onselectionchange={onSelectionChange} />
 <svelte:window onkeydown={(e) => e.key === 'Escape' && (zoomed = null)} />
 
-<section class="assignment" class:editing>
-	<header>
-		<span class="label">
-			<span class="label-icon"><Icon name={navIcon('/')} size={22} /></span>
-			{editing ? 'Auftrag bearbeiten' : 'Auftrag'}
-		</span>
-		{#if canEdit && !editing}
-			<div class="head-actions">
-				<button onclick={startEdit}>Bearbeiten</button>
-				{#if !isEmpty}<button class="danger" onclick={remove}>Löschen</button>{/if}
-			</div>
-		{:else if editing}
-			<!-- Oben statt unter dem Editor – so muss man zum Speichern nicht scrollen. -->
-			<div class="head-actions">
-				<button onclick={() => (editing = false)} disabled={saving}>Abbrechen</button>
-				<button class="primary" onclick={save} disabled={saving || uploading > 0}>
-					{uploading > 0 ? 'Bild lädt…' : 'Speichern'}
-				</button>
-			</div>
-		{/if}
-	</header>
-	{#if editing && error}<p class="error">{error}</p>{/if}
-
-	{#if editing}
-		<input type="text" class="title-input" bind:value={title} placeholder="Titel, z. B. Auftrag 3: Bruchrechnen" maxlength="120" />
-
-		<div class="toolbar" role="toolbar" aria-label="Formatierung" tabindex="-1" onmousedown={keepFocus}>
-			<button class:on={active.bold} aria-pressed={active.bold} title="Fett (Strg+B)" onclick={() => exec('bold')}>
-				<strong>B</strong>
-			</button>
-			<button class:on={active.italic} aria-pressed={active.italic} title="Kursiv (Strg+I)" onclick={() => exec('italic')}>
-				<em>I</em>
-			</button>
-			<button
-				class:on={active.underline}
-				aria-pressed={active.underline}
-				title="Unterstrichen (Strg+U)"
-				onclick={() => exec('underline')}
-			>
-				<u>U</u>
-			</button>
-			<span class="sep"></span>
-			<button class:on={active.ul} aria-pressed={active.ul} title="Aufzählung" onclick={() => exec('insertUnorderedList')}>
-				• Liste
-			</button>
-			<button class:on={active.ol} aria-pressed={active.ol} title="Nummerierte Liste" onclick={() => exec('insertOrderedList')}>
-				1. Liste
-			</button>
-			<span class="sep"></span>
-			{#each COLORS as color (color.value)}
-				<button
-					class="swatch"
-					style:--swatch={color.value}
-					title={color.name}
-					aria-label="Textfarbe {color.name}"
-					onclick={() => exec('foreColor', color.value)}
-				></button>
-			{/each}
-			<label class="custom-color" title="Eigene Farbe">
-				<input type="color" aria-label="Eigene Textfarbe" onchange={(e) => exec('foreColor', e.currentTarget.value)} />
-			</label>
-			<span class="sep"></span>
-			<button title="Link einfügen" onclick={addLink}>Link</button>
-			<button title="Bild hinzufügen" onclick={() => fileInput?.click()}>Bild</button>
-			<button title="Formatierung der Auswahl entfernen" onclick={() => exec('removeFormat')}>Format löschen</button>
-			<input
-				type="file"
-				accept="image/png,image/jpeg,image/gif,image/webp"
-				multiple
-				hidden
-				bind:this={fileInput}
-				onchange={(e) => {
-					upload([...(e.currentTarget.files ?? [])]);
-					e.currentTarget.value = '';
-				}}
-			/>
-		</div>
-	{:else if isEmpty}
-		<p class="empty">
-			{canEdit ? 'Noch kein Auftrag – über „Bearbeiten“ erstellen.' : 'Aktuell gibt es keinen Auftrag.'}
-		</p>
-	{:else if assignment.title}
-		<h2>{assignment.title}</h2>
-	{/if}
-
-	{#if editing || !isEmpty}
-		<div class="layout" class:with-images={editing || shownImages.length > 0}>
-			{#if editing || shownImages.length > 0}
-				<div class="media" class:multi={shownImages.length > 1}>
-					{#each shownImages as id (id)}
-						<div class="thumb">
-							<button type="button" class="zoom-btn" aria-label="Bild vergrößern" onclick={() => (zoomed = fileUrl(id))}>
-								<img src={fileUrl(id)} alt="" loading="lazy" />
-							</button>
-							{#if editing}
-								<button
-									type="button"
-									class="remove icon-btn"
-									aria-label="Bild entfernen"
-									onclick={() => (images = images.filter((i) => i !== id))}>✕</button
-								>
-							{/if}
-						</div>
-					{/each}
-					{#if editing}
-						<button type="button" class="add-image" onclick={() => fileInput?.click()}>
-							{uploading > 0 ? 'Wird hochgeladen…' : '+ Bild'}
-						</button>
-						<p class="help">Auch per Strg+V oder Hineinziehen</p>
-					{/if}
+<section class="assignment" class:editing class:with-images={editing || shownImages.length > 0}>
+	<div class="main">
+		<header>
+			<span class="label">{editing ? 'Auftrag bearbeiten' : 'Auftrag'}</span>
+			{#if canEdit && !editing}
+				<div class="head-actions">
+					<button class="text-btn" onclick={startEdit}><Icon name="pencil" size={13} /> Bearbeiten</button>
+					{#if !isEmpty}<button class="text-btn danger" onclick={remove}>Löschen</button>{/if}
+				</div>
+			{:else if editing}
+				<!-- Oben statt unter dem Editor – so muss man zum Speichern nicht scrollen. -->
+				<div class="head-actions">
+					<button onclick={() => (editing = false)} disabled={saving}>Abbrechen</button>
+					<button class="primary" onclick={save} disabled={saving || uploading > 0}>
+						{uploading > 0 ? 'Bild lädt…' : 'Speichern'}
+					</button>
 				</div>
 			{/if}
+		</header>
+		{#if editing && error}<p class="error">{error}</p>{/if}
 
+		{#if editing}
+			<input type="text" class="title-input" bind:value={title} placeholder="Titel, z. B. Geschichte – Das Römische Reich" maxlength="120" />
+
+			<div class="toolbar" role="toolbar" aria-label="Formatierung" tabindex="-1" onmousedown={keepFocus}>
+				<button class:on={active.bold} aria-pressed={active.bold} title="Fett (Strg+B)" onclick={() => exec('bold')}>
+					<strong>B</strong>
+				</button>
+				<button class:on={active.italic} aria-pressed={active.italic} title="Kursiv (Strg+I)" onclick={() => exec('italic')}>
+					<em>I</em>
+				</button>
+				<button
+					class:on={active.underline}
+					aria-pressed={active.underline}
+					title="Unterstrichen (Strg+U)"
+					onclick={() => exec('underline')}
+				>
+					<u>U</u>
+				</button>
+				<span class="sep"></span>
+				<button class:on={active.ul} aria-pressed={active.ul} title="Aufzählung" onclick={() => exec('insertUnorderedList')}>
+					• Liste
+				</button>
+				<button
+					class:on={active.ol}
+					aria-pressed={active.ol}
+					title="Nummerierte Schritte – Umschalt+Enter für eine graue Zusatzzeile"
+					onclick={() => exec('insertOrderedList')}
+				>
+					1. Schritte
+				</button>
+				<span class="sep"></span>
+				{#each COLORS as color (color.value)}
+					<button
+						class="swatch"
+						style:--swatch={color.value}
+						title={color.name}
+						aria-label="Textfarbe {color.name}"
+						onclick={() => exec('foreColor', color.value)}
+					></button>
+				{/each}
+				<label class="custom-color" title="Eigene Farbe">
+					<input type="color" aria-label="Eigene Textfarbe" onchange={(e) => exec('foreColor', e.currentTarget.value)} />
+				</label>
+				<span class="sep"></span>
+				<button title="Link einfügen" onclick={addLink}>Link</button>
+				<button title="Bild hinzufügen" onclick={() => fileInput?.click()}>Bild</button>
+				<button title="Formatierung der Auswahl entfernen" onclick={() => exec('removeFormat')}>Format löschen</button>
+				<input
+					type="file"
+					accept="image/png,image/jpeg,image/gif,image/webp"
+					multiple
+					hidden
+					bind:this={fileInput}
+					onchange={(e) => {
+						upload([...(e.currentTarget.files ?? [])]);
+						e.currentTarget.value = '';
+					}}
+				/>
+			</div>
+
+			<div
+				class="content editable"
+				contenteditable="true"
+				role="textbox"
+				aria-multiline="true"
+				aria-label="Auftragstext"
+				tabindex="0"
+				data-placeholder="Was sollen die Schüler tun?"
+				bind:this={editorEl}
+				onpaste={onPaste}
+				ondrop={onDrop}
+				ondragover={(e) => e.preventDefault()}
+			></div>
+		{:else if isEmpty}
+			<p class="empty">
+				{canEdit ? 'Noch kein Auftrag – über „Bearbeiten“ erstellen.' : 'Aktuell gibt es keinen Auftrag.'}
+			</p>
+		{:else}
+			{#if assignment.title}<h2>{assignment.title}</h2>{/if}
+			<div class="content" use:steps={assignment.html}>{@html assignment.html}</div>
+		{/if}
+	</div>
+
+	{#if editing || shownImages.length > 0}
+		<!-- Bilder rechts als Vorschau, groß per Klick -->
+		<aside class="media" class:multi={shownImages.length > 2}>
+			{#each shownImages as id (id)}
+				<div class="thumb">
+					<button type="button" class="zoom-btn" aria-label="Bild vergrößern" onclick={() => (zoomed = fileUrl(id))}>
+						<img src={fileUrl(id)} alt="" loading="lazy" />
+					</button>
+					{#if editing}
+						<button
+							type="button"
+							class="remove icon-btn"
+							aria-label="Bild entfernen"
+							onclick={() => (images = images.filter((i) => i !== id))}>✕</button
+						>
+					{/if}
+				</div>
+			{/each}
 			{#if editing}
-				<div
-					class="content editable"
-					contenteditable="true"
-					role="textbox"
-					aria-multiline="true"
-					aria-label="Auftragstext"
-					tabindex="0"
-					data-placeholder="Was sollen die Schüler tun?"
-					bind:this={editorEl}
-					onpaste={onPaste}
-					ondrop={onDrop}
-					ondragover={(e) => e.preventDefault()}
-				></div>
+				<button type="button" class="add-image" onclick={() => fileInput?.click()}>
+					{uploading > 0 ? 'Wird hochgeladen…' : '+ Bild'}
+				</button>
+				<p class="help">Auch per Strg+V oder Hineinziehen</p>
 			{:else}
-				<div class="content">{@html assignment.html}</div>
+				<p class="help caption">Klick vergrößert</p>
 			{/if}
-		</div>
+		</aside>
 	{/if}
-
 </section>
 
 {#if zoomed}
@@ -342,16 +362,28 @@
 {/if}
 
 <style>
+	/* Text links, Bilder rechts; die Karte füllt auf der Startseite den freien Platz. */
 	.assignment {
-		display: flex;
-		flex-direction: column;
-		gap: 14px;
+		flex: 1;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		align-content: start;
+		gap: 32px;
 		padding: 24px 28px;
 		border: 1px solid var(--border);
-		border-left: 6px solid var(--accent);
 		border-radius: var(--radius);
 		background: var(--surface);
-		box-shadow: var(--shadow);
+	}
+
+	.assignment.with-images {
+		grid-template-columns: minmax(0, 1fr) 270px;
+	}
+
+	.main {
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
 	}
 
 	header {
@@ -361,33 +393,43 @@
 		gap: 12px;
 	}
 
+	.label {
+		color: var(--lesson-accent);
+		font-size: 12px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
 	.head-actions {
 		display: flex;
 		gap: 8px;
 	}
 
-	.label-icon {
-		display: inline-grid;
-		place-items: center;
-		width: 36px;
-		height: 36px;
-		border-radius: 10px;
-		background: var(--accent-soft);
-	}
-
-	.label {
+	/* Dezente Text-Knöpfe, damit der Auftrag im Vordergrund steht. */
+	.text-btn {
 		display: inline-flex;
 		align-items: center;
-		gap: 10px;
-		font-size: 0.85rem;
-		font-weight: 700;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: var(--accent);
+		gap: 5px;
+		padding: 2px 6px;
+		border: 0;
+		background: transparent;
+		color: var(--muted);
+		font-size: 14px;
+	}
+
+	.text-btn:hover {
+		color: var(--text);
+	}
+
+	.text-btn.danger:hover {
+		color: var(--danger);
 	}
 
 	h2 {
-		font-size: 1.8rem;
+		margin-bottom: 4px;
+		font-size: 36px;
+		line-height: 1.15;
 	}
 
 	.empty {
@@ -395,17 +437,96 @@
 		color: var(--muted);
 	}
 
-	/* Bilder links, Auftragstext rechts daneben. */
-	.layout {
-		display: grid;
-		grid-template-columns: 1fr;
-		gap: 24px;
-		align-items: start;
+	.content {
+		font-size: 19px;
+		line-height: 1.5;
+		overflow-wrap: anywhere;
 	}
 
-	/* Schmale Bildspalte – die Bilder sind nur Vorschauen, groß gibt es sie per Klick. */
-	.layout.with-images {
-		grid-template-columns: minmax(140px, 200px) minmax(0, 1fr);
+	.content :global(:first-child) {
+		margin-top: 0;
+	}
+
+	.content :global(:last-child) {
+		margin-bottom: 0;
+	}
+
+	.content :global(p),
+	.content :global(ul),
+	.content :global(ol) {
+		margin: 0 0 0.8em;
+	}
+
+	.content :global(ul) {
+		padding-left: 1.4em;
+	}
+
+	.content :global(li) {
+		margin: 0.2em 0;
+	}
+
+	/* Nummerierte Liste als Schritte: Zahl im Kreis, große Zeile, graue Zusatzzeile (Umschalt+Enter). */
+	.content :global(ol) {
+		padding: 0;
+		list-style: none;
+		counter-reset: step;
+	}
+
+	.content :global(ol > li) {
+		position: relative;
+		margin: 0;
+		padding: 8px 0 8px 50px;
+		border-bottom: 1px solid var(--border);
+		font-size: 23px;
+		font-weight: 500;
+		line-height: 1.3;
+		counter-increment: step;
+	}
+
+	.content :global(ol > li:last-child) {
+		border-bottom: 0;
+	}
+
+	.content :global(ol > li::before) {
+		content: counter(step);
+		position: absolute;
+		top: 8px;
+		left: 0;
+		display: grid;
+		place-items: center;
+		width: 34px;
+		height: 34px;
+		border-radius: 50%;
+		background: var(--track);
+		color: var(--lesson-accent);
+		font-size: 16px;
+		font-weight: 700;
+	}
+
+	.content :global(ol > li .sub) {
+		display: block;
+		margin-top: 2px;
+		color: var(--muted);
+		font-size: 16px;
+		font-weight: 400;
+	}
+
+	.content :global(h3),
+	.content :global(h4) {
+		margin: 1em 0 0.4em;
+	}
+
+	.content :global(a) {
+		color: var(--lesson-accent);
+		text-decoration: none;
+	}
+
+	.content :global(a:hover) {
+		text-decoration: underline;
+	}
+
+	.content :global(a::before) {
+		content: '🔗 ';
 	}
 
 	.media {
@@ -422,27 +543,21 @@
 		display: block;
 		width: 100%;
 		padding: 0;
-		border: 1px solid var(--border);
+		border: 0;
 		border-radius: 10px;
 		overflow: hidden;
-		background: var(--bg);
-		box-shadow: var(--shadow);
+		background: var(--track);
 		cursor: zoom-in;
-	}
-
-	/* Beim Darüberfahren ruhig bleiben – nur der Lupen-Cursor zeigt, dass man klicken kann. */
-	.zoom-btn:hover {
-		border-color: var(--border);
 	}
 
 	.zoom-btn img {
 		display: block;
 		width: 100%;
-		max-height: 170px;
-		object-fit: contain;
+		aspect-ratio: 3 / 2;
+		object-fit: cover;
 	}
 
-	/* Mehrere Bilder: kompaktes 2er-Raster aus quadratischen Mini-Vorschauen. */
+	/* Mehr als zwei Bilder: kompaktes 2er-Raster aus quadratischen Mini-Vorschauen. */
 	.media.multi {
 		display: grid;
 		grid-template-columns: repeat(2, 1fr);
@@ -452,14 +567,16 @@
 
 	.media.multi .zoom-btn img {
 		aspect-ratio: 1;
-		max-height: none;
-		object-fit: cover;
 	}
 
-	/* „+ Bild“ und Hinweis im Bearbeitungsmodus über die ganze Breite. */
+	/* „+ Bild“ und Hinweise über die ganze Breite. */
 	.media.multi .add-image,
 	.media.multi .help {
 		grid-column: 1 / -1;
+	}
+
+	.caption {
+		text-align: center;
 	}
 
 	.remove {
@@ -479,7 +596,7 @@
 	}
 
 	.add-image {
-		padding: 18px;
+		padding: 12px;
 		border: 2px dashed var(--border);
 		border-radius: 10px;
 		background: transparent;
@@ -491,47 +608,9 @@
 		color: var(--accent);
 	}
 
-	.content {
-		font-size: 1.25rem;
-		line-height: 1.55;
-		overflow-wrap: anywhere;
-	}
-
-	.content :global(:first-child) {
-		margin-top: 0;
-	}
-
-	.content :global(:last-child) {
-		margin-bottom: 0;
-	}
-
-	.content :global(p),
-	.content :global(ul),
-	.content :global(ol) {
-		margin: 0 0 0.8em;
-	}
-
-	.content :global(ul),
-	.content :global(ol) {
-		padding-left: 1.4em;
-	}
-
-	.content :global(li) {
-		margin: 0.2em 0;
-	}
-
-	.content :global(h3),
-	.content :global(h4) {
-		margin: 1em 0 0.4em;
-	}
-
-	.content :global(a) {
-		color: var(--accent);
-	}
-
 	/* Editor füllt den restlichen Bildschirm; lange Texte scrollen im Feld statt auf der Seite. */
 	.editable {
-		height: max(200px, calc(100vh - 330px));
+		height: max(200px, calc(100vh - 384px));
 		overflow-y: auto;
 		padding: 12px 14px;
 		border: 1px solid var(--border);
@@ -541,18 +620,19 @@
 		line-height: 1.5;
 	}
 
+	/* Im Editor die Schritte etwas kleiner, damit mehr Text Platz hat. */
+	.editable :global(ol > li) {
+		font-size: 19px;
+	}
+
 	/* --- Kompakter Bearbeitungsmodus (alles ohne Scrollen sichtbar) --- */
 	.assignment.editing {
-		gap: 10px;
-		padding: 14px 20px 18px;
+		gap: 20px;
+		padding: 16px 20px 18px;
 	}
 
-	.editing .layout {
-		gap: 16px;
-	}
-
-	.editing .layout.with-images {
-		grid-template-columns: minmax(140px, 200px) minmax(0, 1fr);
+	.assignment.editing.with-images {
+		grid-template-columns: minmax(0, 1fr) 200px;
 	}
 
 	.editing .media {
@@ -560,14 +640,6 @@
 		overflow-y: auto;
 		gap: 10px;
 		padding: 8px 8px 0 0;
-	}
-
-	.editing .zoom-btn img {
-		max-height: 130px;
-	}
-
-	.editing .add-image {
-		padding: 10px;
 	}
 
 	.editable:focus {
@@ -701,9 +773,18 @@
 	}
 
 	@media (max-width: 760px) {
-		.layout.with-images,
-		.editing .layout.with-images {
-			grid-template-columns: 1fr;
+		.assignment.with-images,
+		.assignment.editing.with-images {
+			grid-template-columns: minmax(0, 1fr);
+		}
+
+		/* Bilder über dem Text als Reihe kleiner Vorschauen. */
+		.media,
+		.media.multi {
+			order: -1;
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+			gap: 8px;
 		}
 
 		.editing .media {
@@ -711,29 +792,21 @@
 			padding: 0;
 		}
 
-		.media {
-			flex-direction: row;
-			flex-wrap: wrap;
+		.media .zoom-btn img {
+			aspect-ratio: 1;
 		}
 
-		.thumb {
-			width: 140px;
-		}
-
-		.media.multi {
-			grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-		}
-
-		.media.multi .thumb {
-			width: auto;
+		.media .add-image,
+		.media .help {
+			grid-column: 1 / -1;
 		}
 	}
 
 	@media (max-width: 640px) {
 		.assignment,
 		.assignment.editing {
-			padding: 14px 14px 16px;
-			border-left-width: 4px;
+			gap: 16px;
+			padding: 16px;
 		}
 
 		header {
@@ -741,19 +814,22 @@
 		}
 
 		h2 {
-			font-size: 1.35rem;
+			font-size: 26px;
 		}
 
 		.content {
-			font-size: 1.05rem;
+			font-size: 17px;
 		}
 
-		.thumb {
-			width: 110px;
+		.content :global(ol > li) {
+			padding-left: 42px;
+			font-size: 19px;
 		}
 
-		.media.multi {
-			grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+		.content :global(ol > li::before) {
+			width: 28px;
+			height: 28px;
+			font-size: 14px;
 		}
 
 		/* Auf dem Smartphone scrollt die Seite – der Editor braucht keine feste Höhe. */

@@ -2,11 +2,10 @@
 	import { onMount } from 'svelte';
 	import { autoRefresh } from '#lib/refresh.js';
 	import { clock } from '#lib/clock.svelte.js';
-	import LessonBand from './LessonBand.svelte';
 	import StudentTile from './StudentTile.svelte';
 
 	/**
-	 * Kopfband, Titelzeile und Schüler-Raster für Stundenziele und Selbstlernen.
+	 * Titelzeile und Schüler-Raster für Stundenziele und Selbstlernen (das Kopfband kommt aus dem Header).
 	 * @type {{
 	 *   students: import('#lib/server/db.js').Student[],
 	 *   user: import('#lib/server/auth.js').User | null,
@@ -104,7 +103,6 @@
 </script>
 
 <div class="board" style:--page-accent={isSelf ? 'var(--self-accent)' : 'var(--lesson-accent)'}>
-	<LessonBand {students} />
 
 	<div class="head">
 		<h1>

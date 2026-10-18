@@ -1,18 +1,16 @@
 <script>
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import Icon from './Icon.svelte';
-	import ThemeToggle from './ThemeToggle.svelte';
-	import { NAV } from '#lib/nav.js';
-	import Menu from './Menu.svelte';
-	import TimeBars from './TimeBars.svelte';
-	import AnalogClock from './AnalogClock.svelte';
+	import { clock } from '#lib/clock.svelte.js';
+	import { noise, startNoise, stopNoise, wantsAutoStart, watchRemoteNoise } from '#lib/noise.svelte.js';
+	import { atToday, pad } from '#lib/time.js';
 	import logo from '#lib/assets/logo.svg';
-	import NoiseLight from './NoiseLight.svelte';
-	import { noise as noiseState, watchRemoteNoise } from '#lib/noise.svelte.js';
-	import { ui } from '#lib/ui.svelte.js';
+	import Icon from './Icon.svelte';
+	import Menu from './Menu.svelte';
 
 	/**
+	 * Kopfband für alle Seiten: Menü-Knopf, Zeitbalken, (auf den Ziel-Seiten) Klassen-Fortschritt,
+	 * Digitaluhr und kleine Ampel. Auf den Verwaltungsseiten nur Menü-Knopf und Logo.
 	 * @type {{
 	 *   user: import('#lib/server/auth.js').User,
 	 *   settings: { roomName: string, startTime: string, returnTime: string },
@@ -20,206 +18,225 @@
 	 *   noise: import('#lib/server/db.js').NoiseSettings | { enabled: boolean } | null
 	 * }}
 	 */
-	let { user, settings, warnMinutes, noise } = $props();
+	let { user, settings, warnMinutes, noise: noiseSettings } = $props();
+
+	const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+	const LAMPS = /** @type {const} */ (['red', 'yellow', 'green']);
+	const LABELS = { red: 'zu laut', yellow: 'etwas leiser', green: 'gut' };
+	const ADMIN_PAGES = ['/schueler', '/lehrer'];
+	const GOAL_PAGES = ['/stundenziele', '/selbstlernen'];
 
 	const isTeacher = $derived(user.role === 'teacher');
+	const path = $derived(page.url.pathname);
+	const isAdmin = $derived(ADMIN_PAGES.includes(path));
+	/** @type {import('#lib/server/db.js').Student[] | null} */
+	const students = $derived(GOAL_PAGES.includes(path) ? (page.data.students ?? null) : null);
 
-	// Verwaltungsseiten brauchen keine Unterrichtsanzeigen – nur Menü und Logo.
-	const ADMIN_PAGES = ['/schueler', '/lehrer'];
-	// Ziel-Seiten haben ein eigenes Kopfband (LessonBand) – dort nur die schmale Logo-Zeile.
-	const GOAL_PAGES = ['/stundenziele', '/selbstlernen'];
-	const compact = $derived(GOAL_PAGES.includes(page.url.pathname));
-	// Im Fokus-Modus (Auftrag bearbeiten) ebenfalls ausblenden, damit der Editor ganz sichtbar ist.
-	const showLessonInfo = $derived(!ADMIN_PAGES.includes(page.url.pathname) && !GOAL_PAGES.includes(page.url.pathname) && !ui.focus);
-
-	const studentLinks = NAV.filter((item) => !item.teacherOnly);
+	const noiseEnabled = $derived(Boolean(noiseSettings?.enabled));
+	// Schüler sehen die Ampel nur, solange sie auf dem Lehrer-Gerät läuft.
+	const showLight = $derived(noiseEnabled && (isTeacher || noise.active));
 
 	let menuOpen = $state(false);
-	let gearAutoHide = $state(false);
+	let menuAutoHide = $state(false);
 
-	// Schüler sehen die Ampel nur, solange das Lehrer-Gerät misst.
-	const showNoise = $derived(Boolean(noise?.enabled) && (isTeacher || noiseState.active));
+	const now = $derived(clock.now);
+	const start = $derived(now && settings.startTime ? atToday(settings.startTime, now) : null);
+	const end = $derived(now && settings.returnTime ? atToday(settings.returnTime, now) : null);
+	const elapsed = $derived(now && start ? Math.max(0, now.getTime() - start.getTime()) : 0);
+	const remaining = $derived(now && end ? end.getTime() - now.getTime() : null);
+	const total = $derived(start && end && end > start ? end.getTime() - start.getTime() : null);
+	const progress = $derived(remaining !== null && remaining <= 0 ? 1 : total ? Math.min(1, elapsed / total) : 0);
+	const status = $derived(
+		remaining === null ? '' : remaining <= 0 ? 'over' : remaining <= warnMinutes * 60000 ? 'soon' : ''
+	);
+
+	const totalGoals = $derived(students?.reduce((sum, s) => sum + s.goals.length, 0) ?? 0);
+	const doneGoals = $derived(students?.reduce((sum, s) => sum + s.goals.filter((g) => g.done).length, 0) ?? 0);
+	const finished = $derived(students?.filter((s) => s.goals.length > 0 && s.goals.every((g) => g.done)).length ?? 0);
+
+	/** @param {number} minutes */
+	const duration = (minutes) => (minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`);
+
+	/** @param {string} hhmm */
+	const short = (hhmm) => hhmm.slice(0, 5);
+
+	function toggleLight() {
+		if (noise.active) stopNoise();
+		else startNoise();
+	}
 
 	onMount(() => {
 		try {
-			gearAutoHide = localStorage.getItem('gearAutoHide') === '1';
+			menuAutoHide = localStorage.getItem('gearAutoHide') === '1';
 		} catch {
 			// Kein localStorage verfügbar – Standard bleibt.
 		}
-		if (!isTeacher && noise?.enabled) return watchRemoteNoise();
+		// War die Ampel schon einmal an, ohne erneuten Klick starten (Erlaubnis ist dann bereits erteilt).
+		if (isTeacher && noiseEnabled && !noise.active && wantsAutoStart()) startNoise();
+		if (!isTeacher && noiseEnabled) return watchRemoteNoise();
 	});
 </script>
 
-<header class="topbar" class:compact>
-	<div class="left">
-		<!-- Zahnrad und Logo in einer gemeinsamen Leiste -->
-		<div class="brandbar">
-			{#if isTeacher}
-				<button
-					class="gear"
-					class:open={menuOpen}
-					class:autohide={gearAutoHide}
-					aria-label="Menü"
-					aria-expanded={menuOpen}
-					title="Menü"
-					onclick={() => (menuOpen = !menuOpen)}
+<header class="band">
+	<button
+		class="menu-btn"
+		class:open={menuOpen}
+		class:autohide={menuAutoHide}
+		aria-label="Menü"
+		aria-expanded={menuOpen}
+		title="Menü"
+		onclick={() => (menuOpen = !menuOpen)}
+	>
+		<Icon name="menu" size={22} />
+	</button>
+	<span class="divider" aria-hidden="true"></span>
+
+	{#if isAdmin}
+		<a href="/" class="brand" aria-label="classRoom – zur Startseite">
+			<img src={logo} alt="" width="32" height="32" />
+			<span class="wordmark">class<span class="r">R</span>oom</span>
+		</a>
+	{:else}
+		{#if settings.returnTime}
+			<div class="time {status}">
+				<div class="meta">
+					<span>{settings.roomName}{#if settings.startTime}{` · Beginn ${short(settings.startTime)}`}{/if}</span>
+					<span>Rückkehr {short(settings.returnTime)}</span>
+				</div>
+				<div
+					class="track"
+					role="img"
+					aria-label={remaining === null ? 'Zeit' : `${duration(Math.max(0, Math.ceil(remaining / 60000)))} bis zur Rückkehr`}
 				>
-					<Icon name="gear" size={24} />
-				</button>
-				<span class="divider" aria-hidden="true"></span>
-			{/if}
-			<a href="/" class="brand" aria-label="classRoom – zur Startseite">
-				<img src={logo} alt="" width="40" height="40" />
-				<span class="wordmark">class<span class="r">R</span>oom</span>
-			</a>
-		</div>
-		{#if !isTeacher}
-			<div class="me">
-				<span class="name">{user.displayName}</span>
-				<nav>
-					{#each studentLinks as link (link.href)}
-						<a href={link.href} class:active={page.url.pathname === link.href}>
-							<Icon name={link.icon} size={18} />
-							{link.short ?? link.label}
-						</a>
-					{/each}
-				</nav>
-				<ThemeToggle />
-				<form method="POST" action="/logout">
-					<button type="submit">Abmelden</button>
-				</form>
+					<div class="fill" style:width="{progress * 100}%">
+						<!-- Text im gefüllten Teil nur, wenn er dort Platz hat und nicht mit „noch …“ kollidiert -->
+						{#if start && now && progress >= 0.3 && progress <= 0.82}
+							<span>{duration(Math.floor(elapsed / 60000))} vorbei</span>
+						{/if}
+					</div>
+					{#if remaining !== null}
+						<span class="left">{remaining <= 0 ? 'Zeit ist um' : `noch ${duration(Math.ceil(remaining / 60000))}`}</span>
+					{/if}
+				</div>
+			</div>
+		{:else}
+			<div class="time placeholder">{settings.roomName}</div>
+		{/if}
+
+		{#if students}
+			<div class="class-stats">
+				<span class="label">Klasse</span>
+				<span class="big"><strong>{doneGoals}/{totalGoals}</strong> Ziele</span>
+				<span class="small">{finished} von {students.length} fertig</span>
 			</div>
 		{/if}
-	</div>
 
-	{#if showLessonInfo}
-		<div class="center">
-			<TimeBars {settings} {warnMinutes} />
+		<span class="divider" aria-hidden="true"></span>
+
+		<div class="clock">
+			<span class="hhmm">{now ? `${pad(now.getHours())}:${pad(now.getMinutes())}` : '--:--'}</span>
+			<span class="date">
+				{now ? `${WEEKDAYS[now.getDay()]}, ${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()}` : ''}
+			</span>
 		</div>
 
-		<!-- Ampel und Uhr in einer gemeinsamen Karte, passend zur Leiste oben links -->
-		<div class="right">
-			{#if showNoise}
-				<NoiseLight remote={!isTeacher} />
-				<span class="divider tall" aria-hidden="true"></span>
+		{#if showLight}
+			{@const label = noise.active ? `Lautstärke-Ampel: ${LABELS[noise.status]}` : 'Lautstärke-Ampel aus'}
+			{#if isTeacher}
+				<button
+					class="light"
+					class:inactive={!noise.active}
+					onclick={toggleLight}
+					aria-label="{label} – klicken zum {noise.active ? 'Stoppen' : 'Starten'}"
+					title={noise.active ? 'Ampel stoppen' : 'Ampel starten (Mikrofon)'}
+				>
+					{#each LAMPS as color (color)}
+						<span class="lamp {color}" class:on={noise.active && noise.status === color}></span>
+					{/each}
+				</button>
+			{:else}
+				<div class="light" role="img" aria-label={label}>
+					{#each LAMPS as color (color)}
+						<span class="lamp {color}" class:on={noise.active && noise.status === color}></span>
+					{/each}
+				</div>
 			{/if}
-			<AnalogClock />
-		</div>
+		{/if}
 	{/if}
 </header>
+{#if isTeacher && noise.error}<p class="noise-error">{noise.error}</p>{/if}
 
-{#if isTeacher}
-	<Menu bind:open={menuOpen} bind:gearAutoHide {settings} {user} noiseSettings={noise} />
-{/if}
+<Menu bind:open={menuOpen} bind:autoHide={menuAutoHide} {settings} {user} noiseSettings={isTeacher ? noiseSettings : null} />
 
 <style>
-	.topbar {
-		display: grid;
-		grid-template-columns: 1fr minmax(0, 680px) 1fr;
-		align-items: start;
+	.band {
+		display: flex;
+		align-items: center;
 		gap: 24px;
-		padding: 20px 24px 28px;
-	}
-
-	/* Ziel-Seiten: nur eine schmale Zeile mit Logo bzw. Schüler-Navigation nebeneinander. */
-	.topbar.compact {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 10px 16px;
-		padding: 10px 24px 10px;
-	}
-
-	.compact .left {
-		flex-direction: row;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 10px 16px;
-	}
-
-	.compact .me {
-		flex-direction: row;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 6px 14px;
-		padding: 6px 12px;
-	}
-
-	.compact .me nav {
-		flex-direction: row;
-		flex-wrap: wrap;
-		align-self: auto;
-	}
-
-	/* Senkrechte Ampel links neben der Uhr, beide in einer Karte im Stil der Logo-Leiste. */
-	.right {
-		justify-self: end;
-		display: flex;
-		align-items: center;
-		gap: clamp(14px, 1.4vw, 24px);
-		padding: clamp(12px, 1.2vw, 18px) clamp(14px, 1.4vw, 22px);
+		margin: 24px var(--gutter) 18px;
+		padding: 16px 22px;
 		border: 1px solid var(--border);
-		border-radius: 20px;
+		border-radius: var(--radius);
 		background: var(--surface);
-		box-shadow: var(--shadow);
 	}
 
-	.left {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 14px;
+	.menu-btn {
+		flex-shrink: 0;
+		display: grid;
+		place-items: center;
+		width: 40px;
+		height: 40px;
+		padding: 0;
+		border: 0;
+		border-radius: 10px;
+		background: var(--track);
+		color: var(--text);
+		transition:
+			opacity 0.25s,
+			background 0.2s,
+			color 0.2s;
 	}
 
-	/* Eine Leiste für Menü-Knopf und Logo, im Stil der übrigen Karten. */
-	.brandbar {
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
-		padding: 6px 16px 6px 6px;
-		border: 1px solid var(--border);
-		border-radius: 16px;
-		background: var(--surface);
-		box-shadow: var(--shadow);
+	.menu-btn:hover,
+	.menu-btn.open {
+		background: var(--accent-soft);
+		color: var(--accent);
 	}
 
-	/* Ohne Zahnrad (Schüler) gleichmäßiger Rand. */
-	.brandbar:not(:has(.gear)) {
-		padding-left: 12px;
+	/* Ausgeblendet, bis man mit der Maus darüberfährt oder es per Tastatur fokussiert. */
+	.menu-btn.autohide:not(:hover):not(:focus-visible):not(.open) {
+		opacity: 0;
+	}
+
+	/* Auf Touch-Geräten gibt es kein Darüberfahren – Knopf dort immer zeigen. */
+	@media (hover: none) {
+		.menu-btn.autohide:not(.open) {
+			opacity: 1;
+		}
 	}
 
 	.divider {
-		width: 1px;
-		height: 28px;
-		background: var(--border);
-	}
-
-	.divider.tall {
+		flex-shrink: 0;
 		align-self: stretch;
-		height: auto;
-		margin: 8px 0;
+		width: 1px;
+		background: var(--border);
 	}
 
 	.brand {
 		display: inline-flex;
 		align-items: center;
 		gap: 10px;
-		padding: 2px 4px;
-		border-radius: 10px;
 		color: var(--text);
 		text-decoration: none;
 	}
 
 	.brand img {
-		width: 38px;
-		height: 38px;
-		border-radius: 9px;
+		border-radius: 8px;
 	}
 
 	.wordmark {
-		font-size: 1.4rem;
+		font-size: 1.3rem;
 		font-weight: 800;
-		letter-spacing: -0.01em;
 	}
 
 	/* Wie im Banner: das „R“ in Orange. */
@@ -227,241 +244,239 @@
 		color: #f08a3c;
 	}
 
-	.gear {
-		display: grid;
-		place-items: center;
-		width: 44px;
-		height: 44px;
-		padding: 0;
-		border: 0;
-		border-radius: 12px;
-		background: transparent;
-		color: var(--muted);
-		transition:
-			opacity 0.25s,
-			transform 0.3s,
-			color 0.2s,
-			background 0.2s;
-	}
-
-	.gear:hover,
-	.gear.open {
-		background: var(--accent-soft);
-		color: var(--accent);
-	}
-
-	.gear.open {
-		transform: rotate(60deg);
-	}
-
-	/* Ausgeblendet, bis man mit der Maus darüberfährt oder es per Tastatur/Touch fokussiert. */
-	.gear.autohide:not(:hover):not(:focus-visible):not(.open) {
-		opacity: 0;
-	}
-
-	.me {
-		display: inline-flex;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 8px;
-		padding: 12px 16px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		background: var(--surface);
-		box-shadow: var(--shadow);
-	}
-
-	.name {
-		font-weight: 700;
-		font-size: 1.1rem;
-	}
-
-	.me nav {
+	.time {
+		flex: 1;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
-		align-self: stretch;
+		gap: 8px;
 	}
 
-	.me nav a {
+	.meta {
+		display: flex;
+		justify-content: space-between;
+		gap: 12px;
+		color: var(--muted);
+		font-size: 13px;
+	}
+
+	.meta span {
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	.track {
+		position: relative;
+		height: 30px;
+		overflow: hidden;
+		border-radius: 8px;
+		background: var(--track);
+		font-size: 14px;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.fill {
+		position: absolute;
+		inset: 0 auto 0 0;
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 6px 10px;
+		justify-content: flex-end;
+		padding-right: 12px;
 		border-radius: 8px;
+		background: var(--lesson-accent);
+		color: #0d1424;
+		white-space: nowrap;
+		transition: width 1s linear;
+	}
+
+	.soon .fill {
+		background: var(--warn);
+	}
+
+	.over .fill {
+		background: var(--danger);
+	}
+
+	.left {
+		position: absolute;
+		top: 50%;
+		right: 12px;
+		transform: translateY(-50%);
+		white-space: nowrap;
+	}
+
+	.soon .left {
+		color: var(--warn);
+	}
+
+	.over .left {
+		color: #fff;
+	}
+
+	.placeholder {
+		color: var(--muted);
+		font-size: 15px;
+	}
+
+	.class-stats {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		line-height: 1.15;
+		white-space: nowrap;
+	}
+
+	.label {
+		color: var(--muted);
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	.big {
+		color: var(--muted);
+		font-size: 17px;
+	}
+
+	.big strong {
 		color: var(--text);
-		text-decoration: none;
+		font-size: 28px;
+		font-variant-numeric: tabular-nums;
 	}
 
-	.me nav a:hover {
-		background: var(--bg);
+	.small {
+		color: var(--muted);
+		font-size: 13px;
 	}
 
-	.me nav a.active {
-		background: var(--accent-soft);
-		color: var(--accent);
-		font-weight: 600;
+	.clock {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		line-height: 1.1;
+		white-space: nowrap;
 	}
 
-	/* Auf Touch-Geräten gibt es kein Darüberfahren – Zahnrad dort immer zeigen. */
-	@media (hover: none) {
-		.gear.autohide:not(.open) {
-			opacity: 1;
-		}
+	.hhmm {
+		font-size: 44px;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: -0.01em;
 	}
 
-	/* Tablet: Balken unter Logo und Uhr, Uhr und Ampel etwas kleiner. */
-	@media (max-width: 900px) {
-		.topbar {
-			grid-template-columns: auto 1fr;
-			gap: 16px;
-			padding: 16px 16px 20px;
+	.date {
+		color: var(--muted);
+		font-size: 13px;
+	}
+
+	/* Kleine senkrechte Ampel; Gehäuse in beiden Themes dunkel. */
+	.light {
+		flex-shrink: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding: 7px;
+		border: 0;
+		border-radius: 999px;
+		background: #1b2029;
+		box-shadow: inset 0 1px 4px rgb(0 0 0 / 50%);
+	}
+
+	button.light {
+		cursor: pointer;
+	}
+
+	.lamp {
+		width: 16px;
+		height: 16px;
+		border-radius: 50%;
+		transition:
+			background 0.25s,
+			box-shadow 0.25s;
+	}
+
+	.lamp.red {
+		background: #4a1c1c;
+	}
+
+	.lamp.yellow {
+		background: #4a3c14;
+	}
+
+	.lamp.green {
+		background: #173a26;
+	}
+
+	.lamp.red.on {
+		background: #ff3b3b;
+		box-shadow: 0 0 10px 2px rgb(255 59 59 / 60%);
+	}
+
+	.lamp.yellow.on {
+		background: #ffc531;
+		box-shadow: 0 0 10px 2px rgb(255 197 49 / 55%);
+	}
+
+	.lamp.green.on {
+		background: #2fdc76;
+		box-shadow: 0 0 10px 2px rgb(47 220 118 / 50%);
+	}
+
+	.inactive .lamp {
+		opacity: 0.5;
+	}
+
+	.noise-error {
+		margin: -10px var(--gutter) 14px;
+		color: var(--danger);
+		font-size: 13px;
+		text-align: right;
+	}
+
+	/* Schmale Bildschirme: oben Menü, Klasse, Uhr und Ampel – darunter der Zeitbalken. */
+	@media (max-width: 760px) {
+		.band {
+			flex-wrap: wrap;
+			gap: 12px 14px;
+			margin-top: 12px;
+			margin-bottom: 14px;
+			padding: 12px 14px;
 		}
 
-		.center {
-			grid-column: 1 / -1;
-			grid-row: 2;
-			min-width: 0;
-		}
-
-		/* Auf der kleineren Ampel nur das Mikrofon-Symbol als Start-Knopf. */
-		.right :global(.start) {
-			padding: 4px 6px;
-		}
-
-		.right :global(.start-text) {
+		.divider {
 			display: none;
 		}
 
-		.right {
-			--clock-size: clamp(120px, 20vw, 170px);
-			gap: 14px;
-			padding: 10px 14px;
+		.time {
+			order: 5;
+			flex-basis: 100%;
 		}
 
-		.right :global(.lamp) {
-			width: clamp(24px, 3.6vw, 36px);
+		.class-stats {
+			align-items: flex-start;
 		}
 
-		.right :global(.date .value) {
-			font-size: 1.3rem;
+		.clock {
+			margin-left: auto;
 		}
 
-		.right :global(.weekday) {
-			font-size: 0.95rem;
+		.hhmm {
+			font-size: 26px;
 		}
 
-		/* Schüler-Navigation nebeneinander statt untereinander. */
-		.me {
-			flex-direction: row;
-			flex-wrap: wrap;
-			align-items: center;
+		.date {
+			font-size: 12px;
 		}
 
-		.me nav {
-			flex-direction: row;
-			flex-wrap: wrap;
-			align-self: auto;
-		}
-	}
-
-	/* Smartphone: eine schmale Zeile mit Logo und kleiner Uhr, darunter Navigation und Balken. */
-	@media (max-width: 640px) {
-		.topbar {
-			grid-template-columns: 1fr auto;
-			align-items: center;
-			gap: 10px;
-			padding: 10px 12px 14px;
+		.big {
+			font-size: 15px;
 		}
 
-		.left {
-			display: contents;
-		}
-
-		.brandbar {
-			grid-column: 1;
-			grid-row: 1;
-			justify-self: start;
-			gap: 4px;
-			padding: 4px 12px 4px 4px;
-			border-radius: 14px;
-		}
-
-		.gear {
-			width: 40px;
-			height: 40px;
-		}
-
-		.brand {
-			gap: 8px;
-		}
-
-		.brand img {
-			width: 30px;
-			height: 30px;
-			border-radius: 8px;
-		}
-
-		.wordmark {
-			font-size: 1.15rem;
-		}
-
-		.right {
-			grid-column: 2;
-			grid-row: 1;
-			--clock-size: 64px;
-			gap: 8px;
-			padding: 6px 10px;
-			border-radius: 14px;
-		}
-
-		.right :global(.clock) {
-			gap: 2px;
-		}
-
-		.right :global(.weekday) {
-			display: none;
-		}
-
-		.right :global(.date .value) {
-			font-size: 0.78rem;
-		}
-
-		.right :global(.ampel) {
-			gap: 3px;
-			padding: 4px;
-		}
-
-		.right :global(.lamp) {
-			width: 14px;
-		}
-
-		.right :global(.lamp) {
-			--glow: 8px;
-			--glow-spread: 1px;
-		}
-
-		.divider.tall {
-			margin: 2px 0;
-		}
-
-		.me {
-			grid-column: 1 / -1;
-			grid-row: 2;
-			gap: 6px 10px;
-			padding: 8px 10px;
-		}
-
-		.name {
-			font-size: 1rem;
-		}
-
-		.me nav a {
-			padding: 6px 8px;
-		}
-
-		.center {
-			grid-row: 3;
+		.big strong {
+			font-size: 22px;
 		}
 	}
 </style>
