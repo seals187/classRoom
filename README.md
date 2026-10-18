@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/promo-1.png" alt="classRoom – Der Werkzeugkasten für den Unterricht" width="100%"></p>
+<p align="center"><img src="assets/banner-1.png" alt="classRoom – Der Werkzeugkasten für den Unterricht" width="100%"></p>
 
 <p align="center">
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.3.1-6c8cff" alt="Version 0.3.1"></a>
@@ -23,7 +23,7 @@
 | 🎨 **Hintergründe** | 25 Verläufe, 26 Muster, 18 Fotos oder eigene Bilder – für alle festgelegt oder von jedem Schüler selbst gewählt. Hell- und Dunkelmodus. |
 | 👥 **Verwaltung** | Schüler und Lehrkräfte in Minuten angelegt; Schüler melden sich mit Kürzel oder „Vorname Nachname“ an. |
 
-<p align="center"><img src="assets/promo-2.png" alt="Stundenziele und Selbstlern-Modus" width="100%"></p>
+<p align="center"><img src="assets/banner-2.png" alt="Stundenziele und Selbstlern-Modus" width="100%"></p>
 
 <details>
 <summary><b>Alle Details zu den Funktionen</b></summary>
@@ -55,7 +55,7 @@
 
 </details>
 
-<p align="center"><img src="assets/promo-3.png" alt="Test-Modus" width="49%"> <img src="assets/promo-4.png" alt="Verwaltung und Hintergründe" width="49%"></p>
+<p align="center"><img src="assets/banner-3.png" alt="Test-Modus" width="49%"> <img src="assets/banner-4.png" alt="Verwaltung und Hintergründe" width="49%"></p>
 
 ## Installation
 
