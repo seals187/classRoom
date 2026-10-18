@@ -1,0 +1,38 @@
+# Dependabot: wöchentliche Pull Requests für Updates.
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates
+version: 2
+updates:
+  # npm-Pakete (SvelteKit, Vite, better-sqlite3, …)
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      # Svelte/Vite-Pakete hängen voneinander ab → gemeinsam aktualisieren
+      svelte:
+        patterns:
+          - "svelte"
+          - "@sveltejs/*"
+          - "vite"
+    commit-message:
+      prefix: "deps"
+
+  # Node-Basis-Image im Dockerfile
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "docker"
+
+  # Versionen der GitHub Actions im Release-Workflow
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "ci"

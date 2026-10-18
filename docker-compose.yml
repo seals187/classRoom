@@ -1,5 +1,7 @@
 services:
   classroom:
+    # Fertiges Image von GitHub; mit `docker compose up -d --build` wird stattdessen lokal gebaut.
+    image: ghcr.io/seals187/classroom:${CLASSROOM_VERSION:-latest}
     build: .
     env_file:
       - path: .env
