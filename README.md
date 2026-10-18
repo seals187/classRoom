@@ -61,7 +61,35 @@ Raumname, Beginn und Rückkehrzeit lassen sich im Menü kurzfristig überschreib
 
 ## Starten
 
-### Mit Docker
+### Installation mit Docker-Image
+
+Fertige Images (amd64 und arm64) gibt es unter `ghcr.io/seals187/classroom`. Es reicht ein Ordner mit `docker-compose.yml` und `.env` (Vorlage: [`.env.example`](.env.example)):
+
+```yaml
+services:
+  classroom:
+    image: ghcr.io/seals187/classroom:0.1.0
+    env_file: .env
+    environment:
+      PORT: 3000
+      DATABASE_PATH: /app/data/classroom.db
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - classroom-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  classroom-data:
+```
+
+```bash
+docker compose up -d
+```
+
+Update auf eine neue Version: Versionsnummer im `image:` anpassen, dann `docker compose pull && docker compose up -d`.
+
+### Aus dem Quellcode bauen
 
 ```bash
 docker compose up -d --build
@@ -78,7 +106,12 @@ docker compose cp classroom:/app/data/classroom.db ./backup.db
 ### Lokal mit Node.js (ab Version 22)
 
 ```bash
-npm install
+npm ci
 npm run dev      # Entwicklung mit Hot-Reload
 npm run build && npm start   # Produktionsbuild
 ```
+
+## Releases & Updates
+
+- **Release erstellen:** Version in `package.json` anheben, committen und einen Tag pushen, z. B. `git tag v0.2.0 && git push origin v0.2.0`. GitHub Actions baut dann das Docker-Image, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release an.
+- **Abhängigkeiten:** Dependabot prüft wöchentlich npm-Pakete, das Docker-Basis-Image und die GitHub Actions und öffnet bei Updates Pull Requests.
