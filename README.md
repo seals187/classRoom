@@ -90,6 +90,7 @@ cp .env.example .env
 
 | Variable | Bedeutung | Standard |
 |---|---|---|
+| `CLASSROOM_VERSION` | Version des Docker-Images, z. B. `0.2.1` | `latest` |
 | `PORT` | Port der App | `3000` |
 | `DATABASE_PATH` | Pfad der SQLite-Datei (nur lokal; im Container fest `/app/data`) | `data/classroom.db` |
 | `TEACHER_USERNAME` | Benutzername des Lehrerkontos aus der `.env` | `lehrer` |
@@ -112,38 +113,27 @@ Raumname, Beginn, Rückkehrzeit und die Ampel-Einstellungen lassen sich im Menü
 
 ### Installation mit Docker-Image
 
-Fertige Images (amd64 und arm64) gibt es unter `ghcr.io/seals187/classroom`. Es reicht ein Ordner mit `docker-compose.yml` und `.env` (Vorlage: [`.env.example`](.env.example)):
-
-```yaml
-services:
-  classroom:
-    image: ghcr.io/seals187/classroom:0.2.1
-    env_file: .env
-    environment:
-      PORT: 3000
-      DATABASE_PATH: /app/data/classroom.db
-    ports:
-      - "${PORT:-3000}:3000"
-    volumes:
-      - classroom-data:/app/data
-    restart: unless-stopped
-
-volumes:
-  classroom-data:
-```
+Fertige Images (amd64 und arm64) gibt es unter `ghcr.io/seals187/classroom`. Auf dem Server reicht ein Ordner mit der [`docker-compose.yml`](docker-compose.yml) aus diesem Repo und einer `.env` (Vorlage: [`.env.example`](.env.example)) – kein Quellcode nötig:
 
 ```bash
-docker compose up -d
+mkdir -p /opt/classRoom && cd /opt/classRoom
+# docker-compose.yml und .env.example aus dem Repo hierher kopieren
+cp .env.example .env   # TEACHER_PASSWORD setzen, optional CLASSROOM_VERSION=0.2.1
+docker compose pull && docker compose up -d
 ```
 
-Update auf eine neue Version: Versionsnummer im `image:` anpassen, dann `docker compose pull && docker compose up -d`.
+Ohne `CLASSROOM_VERSION` wird `latest` geladen. Update: `CLASSROOM_VERSION` anpassen (oder bei `latest` lassen), dann `docker compose pull && docker compose up -d`.
 
-> Solange das Repository privat ist, ist auch das Image privat: vorher `docker login ghcr.io` mit einem GitHub-Token (`read:packages`).
+> Solange das Repository privat ist, ist auch das Image privat. Vorher einmalig anmelden, mit einem GitHub-Token mit dem Recht `read:packages`:
+> `echo <TOKEN> | docker login ghcr.io -u seals187 --password-stdin`
 
 ### Aus dem Quellcode bauen
 
+Das Image lokal unter demselben Namen bauen; `docker compose up` nimmt dann dieses statt des heruntergeladenen:
+
 ```bash
-docker compose up -d --build
+docker build -t ghcr.io/seals187/classroom:latest .
+docker compose up -d
 ```
 
 Danach läuft die App unter <http://localhost:3000> (bzw. dem `PORT` aus der `.env`). Die Datenbank liegt im Docker-Volume `classroom-data` und bleibt bei Updates erhalten.
