@@ -9,8 +9,11 @@
 </svelte:head>
 
 <section class="card login">
-	<h1><img src={logo} alt="" width="40" height="40" /> class<span class="r">R</span>oom</h1>
-	<p class="sub">Bitte melde dich an.</p>
+	<div class="brand">
+		<img src={logo} alt="" width="72" height="72" />
+		<h1>class<span class="r">R</span>oom</h1>
+		<p class="sub">Bitte melde dich an.</p>
+	</div>
 
 	<form method="POST">
 		<label>
@@ -43,16 +46,24 @@
 		gap: 6px;
 	}
 
-	h1 {
+	/* Logo, Schriftzug und Begrüßung mittig über dem Formular. */
+	.brand {
 		display: flex;
+		flex-direction: column;
 		align-items: center;
-		gap: 10px;
-		font-size: 1.6rem;
-		font-weight: 800;
+		gap: 6px;
+		margin-bottom: 18px;
+		text-align: center;
 	}
 
-	h1 img {
-		border-radius: 9px;
+	.brand img {
+		margin-bottom: 4px;
+		border-radius: 16px;
+	}
+
+	h1 {
+		font-size: 1.8rem;
+		font-weight: 800;
 	}
 
 	.r {
@@ -60,7 +71,7 @@
 	}
 
 	.sub {
-		margin: 0 0 12px;
+		margin: 0;
 		color: var(--muted);
 	}
 

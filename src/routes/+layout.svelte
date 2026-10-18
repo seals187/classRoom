@@ -14,7 +14,7 @@
 </script>
 
 {#if showHeader && data.user && data.settings}
-	<Header user={data.user} settings={data.settings} warnMinutes={data.warnMinutes} />
+	<Header user={data.user} settings={data.settings} warnMinutes={data.warnMinutes} noise={data.noise} />
 {/if}
 
 <main>

@@ -2,33 +2,77 @@
 
 # classRoom
 
-Ein Werkzeugkasten für Lehrerinnen und Lehrer: verschiedene kleine Tools, die sich direkt während des Unterrichts nutzen lassen – schnell erreichbar, ohne Einarbeitung und gut lesbar am Beamer oder Smartboard.
+Ein Werkzeugkasten für Lehrerinnen und Lehrer: verschiedene kleine Tools, die sich direkt während des Unterrichts nutzen lassen – schnell erreichbar, ohne Einarbeitung und gut lesbar am Beamer oder Smartboard. Selbst gehostet per Docker, Daten bleiben auf dem eigenen Server.
 
 ## Funktionen
 
-- **Kopfzeile** (in allen Modi)
-  - Zahnrad-Menü oben links, auf Wunsch ausgeblendet (erscheint beim Darüberfahren)
-  - Balken *abgelaufene Zeit* seit Beginn der Stunde (mit Sanduhr)
-  - Balken *Klassenraum · zurück um HH:MM* – wird orange kurz vor der Rückkehr und rot, wenn die Zeit um ist
-  - Große analoge Uhr mit Wochentag und Datum (dd/mm/yyyy) oben rechts
-- **Auftrag** (Startseite) – Box mit Titel, Text, Links und Bildern für den aktuellen Auftrag. Bilder stehen links als Vorschau (Klick vergrößert), der Auftragstext rechts daneben. Lehrkräfte bearbeiten ihn direkt im Editor mit Werkzeugleiste: fett, kursiv, unterstrichen, Aufzählung, nummerierte Liste, Textfarbe, Link, Bild (auch per Strg+V oder Hineinziehen). Das HTML wird beim Speichern serverseitig bereinigt.
-- **Stundenziele** – erreichbar über den Button unter dem Auftrag. Kacheln wie im Selbstlern-Modus, aber mit eigenen Zielen für die aktuelle Stunde; „Neue Stunde“ leert sie.
-- **Test-Modus** (Menü) – Vollbild-taugliche Anzeige für Prüfungen: große Uhrzeit, Balken „Vergangen“ und „Verbleibend“ (orange kurz vor Schluss, rot wenn die Zeit um ist). Start per Dauer oder Endzeit, Verlängern um 5/10 Minuten. Läuft serverseitig weiter, auch nach Neuladen.
-- **Schüler verwalten** – Vorname und Nachname; der Benutzername wird vorgeschlagen (3 Buchstaben Vorname + 2 Nachname, z. B. Anna Muster → `annmu`) und ist änderbar, das Passwort wird automatisch erzeugt
-- **Selbstlern-Modus** – eine Kachel pro Schüler mit eigenen Zielen zum Abhaken, Fortschrittsbalken; erledigte Ziele werden grün, die Kachel ist ganz grün, wenn alles erledigt ist. Aktualisiert sich alle 5 Sekunden.
+### Kopfzeile
+
+- **Zahnrad-Menü** oben links mit Logo – lässt sich ausblenden (erscheint beim Darüberfahren)
+- **Zeit-Balken** in der Mitte:
+  - *abgelaufene Zeit* seit Beginn der Stunde (mit Sanduhr)
+  - *Klassenraum · zurück um HH:MM* – orange kurz vor der Rückkehr, rot wenn die Zeit um ist
+- **Große analoge Uhr** mit Wochentag und Datum (dd/mm/yyyy), gut lesbar am Beamer
+- **Lautstärke-Ampel** (senkrecht, neben der Uhr) – zeigt über das Mikrofon Grün/Gelb/Rot je nach Lautstärke im Raum
+- Auf den Verwaltungsseiten werden Balken, Uhr und Ampel ausgeblendet
+
+### Auftrag (Startseite)
+
+- Box für den aktuellen Auftrag mit Titel, formatiertem Text, Links und Bildern
+- Bilder links als Vorschau (Klick vergrößert), Auftragstext rechts daneben
+- Editor mit Werkzeugleiste: **fett**, *kursiv*, unterstrichen, Aufzählung, nummerierte Liste, Textfarbe, Link, Bild (auch per Strg+V oder Hineinziehen)
+- Auftrag bearbeiten oder löschen; das HTML wird beim Speichern serverseitig bereinigt
+- Button **Stundenziele** direkt unter dem Auftrag
+
+### Stundenziele & Selbstlern-Modus
+
+- Eine Kachel pro Schüler mit Zielen zum Abhaken und Fortschrittsbalken
+- Erledigte Ziele werden grün, die Kachel ist ganz grün, wenn alles erledigt ist
+- Kompakt für große Klassen (20+ Schüler): Kacheln standardmäßig eingeklappt (nur Name + Fortschritt), einzeln oder für Lehrkräfte per Knopf **alle auf-/einklappen**
+- Übersicht über der Klasse, z. B. „12/60 Ziele erledigt · 3 von 20 Schülern fertig“
+- Schüler bearbeiten nur ihre eigene Kachel; die Seite aktualisiert sich alle 5 Sekunden
+- **Stundenziele** und **Selbstlern-Ziele** sind getrennt; „Neue Stunde“ leert nur die Stundenziele
+
+### Test-Modus
+
+- Anzeige für Prüfungen ohne Kopfzeile und Menü, vollbildtauglich
+- Große analoge Uhr, Balken **Vergangen** (mit Startzeit) und **Verbleibend** (mit Endzeit)
+- Orange kurz vor Schluss, rot und pulsierend wenn die Zeit um ist
+- Start per Dauer (15–90 Min oder eigene) oder Endzeit, Verlängern um 5/10 Minuten
+- Läuft serverseitig weiter, auch nach Neuladen oder auf einem zweiten Gerät
+
+### Lautstärke-Ampel
+
+- Misst die Lautstärke über das Mikrofon des Lehrer-Geräts – **nur im Browser**, nichts wird aufgenommen, gespeichert oder übertragen
+- Im Menü unter **Ampel-Einstellungen**: Empfindlichkeit, Schwelle für Gelb und Rot, Live-Test mit Pegelanzeige
+- Gelb/Rot werden kurz gehalten, damit die Ampel nicht flackert
+- Hinweis: Browser erlauben das Mikrofon nur über **HTTPS oder `localhost`**
+
+### Verwaltung
+
+- **Schüler verwalten** – Vorname, Nachname und Kürzel; das Kürzel wird vorgeschlagen (3 Buchstaben Vorname + 2 Nachname, z. B. Anna Muster → `annmu`) und passt sich beim Umbenennen an
+  - Bearbeiten (✎), neues Passwort (🔑) und Löschen (✕) per Symbol
+  - Zugangsdaten mit Kopier-Knöpfen, Ziel-Übersicht je Schüler (Stunde / Selbst)
+- **Lehrer verwalten** – weitere Lehrkräfte anlegen, Passwörter setzen
+
+### Allgemein
+
 - **Login** mit zwei Rollen:
-  - *Lehrkräfte* sehen alles inkl. Menü; weitere Lehrkräfte unter „Lehrer verwalten“
-  - *Schüler* sehen Auftrag, Stundenziele und Selbstlern-Modus (ohne Menü), sehen alle Kacheln, bearbeiten aber nur ihre eigene
+  - *Lehrkräfte* sehen alles inkl. Menü
+  - *Schüler* sehen Auftrag, Stundenziele und Selbstlern-Modus (ohne Menü)
+- **Hell- und Dunkelmodus**, pro Gerät umschaltbar
+- Menüpunkte mit Symbolen, die auch auf den jeweiligen Seiten erscheinen
 
 ### Zugänge
 
 - Das erste Lehrerkonto kommt aus der `.env` (`TEACHER_USERNAME` / `TEACHER_PASSWORD`). Bei jedem Start wird sein Passwort auf den `.env`-Wert gesetzt – so kommt man nach einem vergessenen Passwort wieder hinein.
-- Schülerzugänge entstehen beim Erfassen. Das Passwort wird **nur einmal** angezeigt; „Neues Passwort“ erzeugt ein neues und meldet den Schüler überall ab.
+- Schüler melden sich mit ihrem **Kürzel** oder mit **„Vorname Nachname“** an.
+- Das Passwort eines Schülers wird **nur einmal** angezeigt; „Neues Passwort“ erzeugt ein neues und meldet den Schüler überall ab.
 - Nach 5 falschen Passwörtern ist ein Benutzername für 5 Minuten gesperrt.
 
 ### Geplant
 
-- Timer & Stoppuhr, Zufallsauswahl, Gruppen bilden, Lautstärke-Ampel
+- Zufallsauswahl, Gruppen bilden
 
 ## Technik
 
@@ -52,12 +96,15 @@ cp .env.example .env
 | `DEFAULT_ROOM_NAME` | Name des Klassenraums | `Klassenzimmer` |
 | `DEFAULT_START_TIME` | Beginn der Stunde (`HH:MM`) | leer |
 | `DEFAULT_RETURN_TIME` | Rückkehr ins Hauptschulzimmer (`HH:MM`) | leer |
-| `WARN_MINUTES` | Ab wie vielen Minuten vor der Rückkehr der Balken orange wird | `5` |
-| `DEFAULT_THEME` | Standard-Darstellung: `system`, `light` oder `dark` (umschaltbar im Menü, pro Gerät gespeichert) | `system` |
+| `WARN_MINUTES` | Ab wie vielen Minuten vor der Rückkehr (bzw. vor Testende) der Balken orange wird | `5` |
+| `DEFAULT_THEME` | Standard-Darstellung: `system`, `light` oder `dark` | `system` |
 | `GOALS_COLLAPSED` | Ziel-Kacheln standardmäßig eingeklappt (nur Name + Fortschritt) | `true` |
 | `UPLOAD_MAX_MB` | Maximale Bildgröße im Auftrag (PNG, JPEG, GIF, WebP) | `5` |
+| `NOISE_ENABLED` | Lautstärke-Ampel anzeigen (nur Lehrkräfte) | `true` |
+| `NOISE_SENSITIVITY` | Empfindlichkeit des Mikrofons, 1–10 | `5` |
+| `NOISE_YELLOW` / `NOISE_RED` | Pegel 0–100, ab dem die Ampel gelb bzw. rot wird | `50` / `75` |
 
-Raumname, Beginn und Rückkehrzeit lassen sich im Menü kurzfristig überschreiben. Diese Werte werden in der Datenbank gespeichert; *Standard* im Menü setzt sie auf die Werte aus der `.env` zurück.
+Raumname, Beginn, Rückkehrzeit und die Ampel-Einstellungen lassen sich im Menü ändern; diese Werte werden in der Datenbank gespeichert und überschreiben die `.env`-Standardwerte. „Zeiten zurücksetzen“ leert Beginn und Rückkehrzeit.
 
 ## Starten
 
@@ -88,6 +135,8 @@ docker compose up -d
 ```
 
 Update auf eine neue Version: Versionsnummer im `image:` anpassen, dann `docker compose pull && docker compose up -d`.
+
+> Solange das Repository privat ist, ist auch das Image privat: vorher `docker login ghcr.io` mit einem GitHub-Token (`read:packages`).
 
 ### Aus dem Quellcode bauen
 

@@ -1,5 +1,5 @@
 import { getConfig } from '$lib/server/config.js';
-import { getSettings } from '$lib/server/db.js';
+import { getNoiseSettings, getSettings } from '$lib/server/db.js';
 
 export function load({ locals }) {
 	if (!locals.user) return { user: null };
@@ -8,6 +8,8 @@ export function load({ locals }) {
 		user: locals.user,
 		settings: getSettings(),
 		warnMinutes: config.warnMinutes,
-		goalsCollapsed: config.goalsCollapsed
+		goalsCollapsed: config.goalsCollapsed,
+		// Ampel nur für Lehrkräfte (Mikrofon am Beamer-Gerät)
+		noise: locals.user.role === 'teacher' ? getNoiseSettings() : null
 	};
 }

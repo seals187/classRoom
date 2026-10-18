@@ -8,17 +8,23 @@
 	import TimeBars from './TimeBars.svelte';
 	import AnalogClock from './AnalogClock.svelte';
 	import logo from '$lib/assets/logo.svg';
+	import NoiseLight from './NoiseLight.svelte';
 
 	/**
 	 * @type {{
 	 *   user: import('$lib/server/auth.js').User,
 	 *   settings: { roomName: string, startTime: string, returnTime: string },
-	 *   warnMinutes: number
+	 *   warnMinutes: number,
+	 *   noise: import('$lib/server/db.js').NoiseSettings | null
 	 * }}
 	 */
-	let { user, settings, warnMinutes } = $props();
+	let { user, settings, warnMinutes, noise } = $props();
 
 	const isTeacher = $derived(user.role === 'teacher');
+
+	// Verwaltungsseiten brauchen keine Unterrichtsanzeigen – nur Menü und Logo.
+	const ADMIN_PAGES = ['/schueler', '/lehrer'];
+	const showLessonInfo = $derived(!ADMIN_PAGES.includes(page.url.pathname));
 
 	const studentLinks = NAV.filter((item) => !item.teacherOnly);
 
@@ -73,17 +79,22 @@
 		{/if}
 	</div>
 
-	<div class="center">
-		<TimeBars {settings} {warnMinutes} />
-	</div>
+	{#if showLessonInfo}
+		<div class="center">
+			<TimeBars {settings} {warnMinutes} />
+		</div>
 
-	<div class="right">
-		<AnalogClock />
-	</div>
+		<div class="right">
+			{#if isTeacher && noise?.enabled}
+				<NoiseLight />
+			{/if}
+			<AnalogClock />
+		</div>
+	{/if}
 </header>
 
 {#if isTeacher}
-	<Menu bind:open={menuOpen} bind:gearAutoHide {settings} {user} />
+	<Menu bind:open={menuOpen} bind:gearAutoHide {settings} {user} noiseSettings={noise} />
 {/if}
 
 <style>
@@ -95,8 +106,12 @@
 		padding: 20px 24px 28px;
 	}
 
+	/* Senkrechte Ampel links neben der Uhr – so bleibt die Kopfzeile gleich hoch. */
 	.right {
 		justify-self: end;
+		display: flex;
+		align-items: flex-start;
+		gap: clamp(12px, 1.4vw, 24px);
 	}
 
 	.left {

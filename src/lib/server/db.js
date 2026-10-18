@@ -193,8 +193,59 @@ export function saveSettings(input) {
 }
 
 export function resetSettings() {
-	getDb().prepare("DELETE FROM settings WHERE key NOT LIKE 'test.%'").run();
+	getDb().prepare("DELETE FROM settings WHERE key IN ('roomName', 'startTime', 'returnTime')").run();
 	return getSettings();
+}
+
+// --- Lautstärke-Ampel: .env liefert die Standardwerte, gespeicherte Werte überschreiben sie ---
+
+/** @typedef {{ enabled: boolean, sensitivity: number, yellow: number, red: number }} NoiseSettings */
+
+/** @returns {NoiseSettings} */
+export function getNoiseSettings() {
+	const defaults = getConfig().noise;
+	const rows = /** @type {{ key: string, value: string }[]} */ (
+		getDb().prepare("SELECT key, value FROM settings WHERE key LIKE 'noise.%'").all()
+	);
+	const stored = Object.fromEntries(rows.map((r) => [r.key.slice('noise.'.length), r.value]));
+	return {
+		enabled: stored.enabled === undefined ? defaults.enabled : stored.enabled === '1',
+		sensitivity: stored.sensitivity === undefined ? defaults.sensitivity : Number(stored.sensitivity),
+		yellow: stored.yellow === undefined ? defaults.yellow : Number(stored.yellow),
+		red: stored.red === undefined ? defaults.red : Number(stored.red)
+	};
+}
+
+/** @param {Record<string, unknown>} input */
+export function saveNoiseSettings(input) {
+	/**
+	 * @param {unknown} value
+	 * @param {string} field
+	 * @param {number} min
+	 * @param {number} max
+	 */
+	const int = (value, field, min, max) => {
+		const n = Number(value);
+		if (!Number.isInteger(n) || n < min || n > max) error(400, `${field} muss zwischen ${min} und ${max} liegen`);
+		return n;
+	};
+	const settings = {
+		enabled: Boolean(input.enabled),
+		sensitivity: int(input.sensitivity, 'Empfindlichkeit', 1, 10),
+		yellow: int(input.yellow, 'Gelb', 1, 99),
+		red: int(input.red, 'Rot', 2, 100)
+	};
+	if (settings.red <= settings.yellow) error(400, 'Rot muss höher liegen als Gelb');
+	const upsert = getDb().prepare(
+		'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+	);
+	getDb().transaction(() => {
+		upsert.run('noise.enabled', settings.enabled ? '1' : '0');
+		upsert.run('noise.sensitivity', String(settings.sensitivity));
+		upsert.run('noise.yellow', String(settings.yellow));
+		upsert.run('noise.red', String(settings.red));
+	})();
+	return settings;
 }
 
 // --- Test-Modus: Start und Ende als Zeitstempel (ms), ebenfalls in der settings-Tabelle ---

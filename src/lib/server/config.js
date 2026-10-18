@@ -5,6 +5,17 @@ const TIME = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 /** @param {string | undefined} value */
 const timeOrEmpty = (value) => (value && TIME.test(value.trim()) ? value.trim() : '');
 
+/**
+ * @param {string | undefined} value
+ * @param {number} min
+ * @param {number} max
+ * @param {number} fallback
+ */
+const intIn = (value, min, max, fallback) => {
+	const n = Math.round(Number(value));
+	return Number.isFinite(n) && value?.trim() ? Math.min(max, Math.max(min, n)) : fallback;
+};
+
 /** Konfiguration aus der .env-Datei (bzw. den Umgebungsvariablen), mit Standardwerten. */
 export function getConfig() {
 	return {
@@ -22,6 +33,12 @@ export function getConfig() {
 		sessionHours: Math.max(1, Number(env.SESSION_HOURS) || 12),
 		uploadMaxMb: Math.max(1, Number(env.UPLOAD_MAX_MB) || 5),
 		goalsCollapsed: env.GOALS_COLLAPSED?.trim().toLowerCase() !== 'false',
+		noise: {
+			enabled: env.NOISE_ENABLED?.trim().toLowerCase() !== 'false',
+			sensitivity: intIn(env.NOISE_SENSITIVITY, 1, 10, 5),
+			yellow: intIn(env.NOISE_YELLOW, 1, 99, 50),
+			red: intIn(env.NOISE_RED, 2, 100, 75)
+		},
 		defaultTheme: ['light', 'dark'].includes(env.DEFAULT_THEME?.trim() ?? '') ? env.DEFAULT_THEME.trim() : 'system'
 	};
 }
