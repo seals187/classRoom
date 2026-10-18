@@ -9,7 +9,8 @@ export function load({ locals }) {
 		settings: getSettings(),
 		warnMinutes: config.warnMinutes,
 		goalsCollapsed: config.goalsCollapsed,
-		// Ampel nur für Lehrkräfte (Mikrofon am Beamer-Gerät)
-		noise: locals.user.role === 'teacher' ? getNoiseSettings() : null
+		// Lehrkräfte messen (Mikrofon am Beamer-Gerät), Schüler sehen nur die Farbe.
+		noise:
+			locals.user.role === 'teacher' ? getNoiseSettings() : { enabled: getNoiseSettings().enabled }
 	};
 }

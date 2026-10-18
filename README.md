@@ -8,19 +8,20 @@ Ein Werkzeugkasten für Lehrerinnen und Lehrer: verschiedene kleine Tools, die s
 
 ### Kopfzeile
 
-- **Zahnrad-Menü** oben links mit Logo – lässt sich ausblenden (erscheint beim Darüberfahren)
+- **Zahnrad-Menü** oben links, zusammen mit dem Logo in einer Leiste – lässt sich ausblenden (erscheint beim Darüberfahren)
 - **Zeit-Balken** in der Mitte:
   - *abgelaufene Zeit* seit Beginn der Stunde (mit Sanduhr)
   - *Klassenraum · zurück um HH:MM* – orange kurz vor der Rückkehr, rot wenn die Zeit um ist
 - **Große analoge Uhr** mit Wochentag und Datum (dd/mm/yyyy), gut lesbar am Beamer
-- **Lautstärke-Ampel** (senkrecht, neben der Uhr) – zeigt über das Mikrofon Grün/Gelb/Rot je nach Lautstärke im Raum
+- **Lautstärke-Ampel** (senkrecht, mit der Uhr in einer Karte) – zeigt über das Mikrofon Grün/Gelb/Rot je nach Lautstärke im Raum
 - Auf den Verwaltungsseiten werden Balken, Uhr und Ampel ausgeblendet
 
 ### Auftrag (Startseite)
 
 - Box für den aktuellen Auftrag mit Titel, formatiertem Text, Links und Bildern
-- Bilder links als Vorschau (Klick vergrößert), Auftragstext rechts daneben
+- Bilder links als kleine Vorschau, mehrere Bilder als kompaktes Raster – Klick zeigt das Bild in voller Größe; Auftragstext rechts daneben
 - Editor mit Werkzeugleiste: **fett**, *kursiv*, unterstrichen, Aufzählung, nummerierte Liste, Textfarbe, Link, Bild (auch per Strg+V oder Hineinziehen)
+- Kompakter Bearbeitungsmodus: Uhr, Balken und Ampel werden ausgeblendet, damit der Editor ohne Scrollen Platz hat
 - Auftrag bearbeiten oder löschen; das HTML wird beim Speichern serverseitig bereinigt
 - Button **Stundenziele** direkt unter dem Auftrag
 
@@ -43,9 +44,10 @@ Ein Werkzeugkasten für Lehrerinnen und Lehrer: verschiedene kleine Tools, die s
 
 ### Lautstärke-Ampel
 
-- Misst die Lautstärke über das Mikrofon des Lehrer-Geräts – **nur im Browser**, nichts wird aufgenommen, gespeichert oder übertragen
+- Misst die Lautstärke über das Mikrofon des Lehrer-Geräts – **nur im Browser**, es wird kein Ton aufgenommen, gespeichert oder übertragen
 - Im Menü unter **Ampel-Einstellungen**: Empfindlichkeit, Schwelle für Gelb und Rot, Live-Test mit Pegelanzeige
 - Gelb/Rot werden kurz gehalten, damit die Ampel nicht flackert
+- **Schüler sehen die Ampel ebenfalls**, solange sie auf dem Lehrer-Gerät läuft – übertragen wird nur die Farbe (grün/gelb/rot), kein Ton
 - Hinweis: Browser erlauben das Mikrofon nur über **HTTPS oder `localhost`**
 
 ### Verwaltung
@@ -115,7 +117,7 @@ Fertige Images (amd64 und arm64) gibt es unter `ghcr.io/seals187/classroom`. Es 
 ```yaml
 services:
   classroom:
-    image: ghcr.io/seals187/classroom:0.2.0
+    image: ghcr.io/seals187/classroom:0.2.1
     env_file: .env
     environment:
       PORT: 3000
@@ -162,5 +164,5 @@ npm run build && npm start   # Produktionsbuild
 
 ## Releases & Updates
 
-- **Release erstellen:** Version in `package.json` anheben, committen und einen Tag pushen, z. B. `git tag v0.2.0 && git push origin v0.2.0`. GitHub Actions baut dann das Docker-Image, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release an.
+- **Release erstellen:** Version in `package.json` anheben, committen und einen Tag pushen, z. B. `git tag v0.2.1 && git push origin v0.2.1`. GitHub Actions baut dann das Docker-Image, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release an.
 - **Abhängigkeiten:** Dependabot prüft wöchentlich npm-Pakete, das Docker-Basis-Image und die GitHub Actions und öffnet bei Updates Pull Requests.

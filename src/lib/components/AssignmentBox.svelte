@@ -1,5 +1,6 @@
 <script>
 	import { tick } from 'svelte';
+	import { ui } from '#lib/ui.svelte.js';
 	import { invalidateAll } from '$app/navigation';
 	import { api } from '#lib/api.js';
 	import { navIcon } from '#lib/nav.js';
@@ -37,6 +38,14 @@
 	/** @type {Range | null} */
 	let lastRange = null;
 
+	// Beim Bearbeiten Platz schaffen: Kopfzeile ohne Balken/Uhr/Ampel (siehe Header).
+	$effect(() => {
+		ui.focus = editing;
+		return () => {
+			ui.focus = false;
+		};
+	});
+
 	const isEmpty = $derived(!assignment.title && !assignment.html && assignment.images.length === 0);
 	const shownImages = $derived(editing ? images : assignment.images);
 
@@ -51,6 +60,7 @@
 		editing = true;
 		await tick();
 		if (editorEl) editorEl.innerHTML = assignment.html;
+		window.scrollTo({ top: 0 });
 	}
 
 	async function save() {
@@ -188,19 +198,28 @@
 <svelte:document onselectionchange={onSelectionChange} />
 <svelte:window onkeydown={(e) => e.key === 'Escape' && (zoomed = null)} />
 
-<section class="assignment">
+<section class="assignment" class:editing>
 	<header>
 		<span class="label">
 			<span class="label-icon"><Icon name={navIcon('/')} size={22} /></span>
-			Auftrag
+			{editing ? 'Auftrag bearbeiten' : 'Auftrag'}
 		</span>
 		{#if canEdit && !editing}
 			<div class="head-actions">
 				<button onclick={startEdit}>Bearbeiten</button>
 				{#if !isEmpty}<button class="danger" onclick={remove}>Löschen</button>{/if}
 			</div>
+		{:else if editing}
+			<!-- Oben statt unter dem Editor – so muss man zum Speichern nicht scrollen. -->
+			<div class="head-actions">
+				<button onclick={() => (editing = false)} disabled={saving}>Abbrechen</button>
+				<button class="primary" onclick={save} disabled={saving || uploading > 0}>
+					{uploading > 0 ? 'Bild lädt…' : 'Speichern'}
+				</button>
+			</div>
 		{/if}
 	</header>
+	{#if editing && error}<p class="error">{error}</p>{/if}
 
 	{#if editing}
 		<input type="text" class="title-input" bind:value={title} placeholder="Titel, z. B. Auftrag 3: Bruchrechnen" maxlength="120" />
@@ -267,7 +286,7 @@
 	{#if editing || !isEmpty}
 		<div class="layout" class:with-images={editing || shownImages.length > 0}>
 			{#if editing || shownImages.length > 0}
-				<div class="media">
+				<div class="media" class:multi={shownImages.length > 1}>
 					{#each shownImages as id (id)}
 						<div class="thumb">
 							<button type="button" class="zoom-btn" aria-label="Bild vergrößern" onclick={() => (zoomed = fileUrl(id))}>
@@ -312,13 +331,6 @@
 		</div>
 	{/if}
 
-	{#if editing}
-		{#if error}<p class="error">{error}</p>{/if}
-		<div class="actions">
-			<button class="primary" onclick={save} disabled={saving || uploading > 0}>Speichern</button>
-			<button onclick={() => (editing = false)} disabled={saving}>Abbrechen</button>
-		</div>
-	{/if}
 </section>
 
 {#if zoomed}
@@ -391,8 +403,9 @@
 		align-items: start;
 	}
 
+	/* Schmale Bildspalte – die Bilder sind nur Vorschauen, groß gibt es sie per Klick. */
 	.layout.with-images {
-		grid-template-columns: minmax(160px, 280px) minmax(0, 1fr);
+		grid-template-columns: minmax(140px, 200px) minmax(0, 1fr);
 	}
 
 	.media {
@@ -425,8 +438,28 @@
 	.zoom-btn img {
 		display: block;
 		width: 100%;
-		max-height: 220px;
+		max-height: 170px;
 		object-fit: contain;
+	}
+
+	/* Mehrere Bilder: kompaktes 2er-Raster aus quadratischen Mini-Vorschauen. */
+	.media.multi {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 8px;
+		align-content: start;
+	}
+
+	.media.multi .zoom-btn img {
+		aspect-ratio: 1;
+		max-height: none;
+		object-fit: cover;
+	}
+
+	/* „+ Bild“ und Hinweis im Bearbeitungsmodus über die ganze Breite. */
+	.media.multi .add-image,
+	.media.multi .help {
+		grid-column: 1 / -1;
 	}
 
 	.remove {
@@ -496,12 +529,45 @@
 		color: var(--accent);
 	}
 
+	/* Editor füllt den restlichen Bildschirm; lange Texte scrollen im Feld statt auf der Seite. */
 	.editable {
-		min-height: 260px;
-		padding: 14px 16px;
+		height: max(200px, calc(100vh - 330px));
+		overflow-y: auto;
+		padding: 12px 14px;
 		border: 1px solid var(--border);
 		border-radius: 10px;
 		outline: none;
+		font-size: 1.05rem;
+		line-height: 1.5;
+	}
+
+	/* --- Kompakter Bearbeitungsmodus (alles ohne Scrollen sichtbar) --- */
+	.assignment.editing {
+		gap: 10px;
+		padding: 14px 20px 18px;
+	}
+
+	.editing .layout {
+		gap: 16px;
+	}
+
+	.editing .layout.with-images {
+		grid-template-columns: minmax(140px, 200px) minmax(0, 1fr);
+	}
+
+	.editing .media {
+		max-height: max(200px, calc(100vh - 330px));
+		overflow-y: auto;
+		gap: 10px;
+		padding: 8px 8px 0 0;
+	}
+
+	.editing .zoom-btn img {
+		max-height: 130px;
+	}
+
+	.editing .add-image {
+		padding: 10px;
 	}
 
 	.editable:focus {
@@ -515,7 +581,8 @@
 	}
 
 	.title-input {
-		font-size: 1.3rem;
+		padding: 6px 10px;
+		font-size: 1.1rem;
 		font-weight: 600;
 	}
 
@@ -523,17 +590,18 @@
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 6px;
-		padding: 8px;
+		gap: 4px;
+		padding: 5px;
 		border: 1px solid var(--border);
 		border-radius: 10px;
 		background: var(--bg);
 	}
 
 	.toolbar button {
-		min-width: 38px;
-		height: 36px;
-		padding: 0 10px;
+		min-width: 32px;
+		height: 30px;
+		padding: 0 8px;
+		font-size: 0.9rem;
 	}
 
 	.toolbar button.on {
@@ -551,8 +619,8 @@
 
 	.toolbar .swatch {
 		min-width: 0;
-		width: 28px;
-		height: 28px;
+		width: 24px;
+		height: 24px;
 		padding: 0;
 		border-radius: 50%;
 		border: 2px solid var(--surface);
@@ -566,8 +634,8 @@
 
 	.custom-color {
 		display: inline-grid;
-		width: 28px;
-		height: 28px;
+		width: 24px;
+		height: 24px;
 		border-radius: 50%;
 		overflow: hidden;
 		box-shadow: 0 0 0 1px var(--border);
@@ -586,11 +654,6 @@
 		margin: 0;
 		color: var(--muted);
 		font-size: 0.85rem;
-	}
-
-	.actions {
-		display: flex;
-		gap: 8px;
 	}
 
 	.error {
@@ -648,7 +711,15 @@
 		}
 
 		.thumb {
-			width: 160px;
+			width: 140px;
+		}
+
+		.media.multi {
+			grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+		}
+
+		.media.multi .thumb {
+			width: auto;
 		}
 	}
 </style>

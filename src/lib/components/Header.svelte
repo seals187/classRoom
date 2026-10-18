@@ -9,13 +9,15 @@
 	import AnalogClock from './AnalogClock.svelte';
 	import logo from '#lib/assets/logo.svg';
 	import NoiseLight from './NoiseLight.svelte';
+	import { noise as noiseState, watchRemoteNoise } from '#lib/noise.svelte.js';
+	import { ui } from '#lib/ui.svelte.js';
 
 	/**
 	 * @type {{
 	 *   user: import('#lib/server/auth.js').User,
 	 *   settings: { roomName: string, startTime: string, returnTime: string },
 	 *   warnMinutes: number,
-	 *   noise: import('#lib/server/db.js').NoiseSettings | null
+	 *   noise: import('#lib/server/db.js').NoiseSettings | { enabled: boolean } | null
 	 * }}
 	 */
 	let { user, settings, warnMinutes, noise } = $props();
@@ -24,12 +26,16 @@
 
 	// Verwaltungsseiten brauchen keine Unterrichtsanzeigen – nur Menü und Logo.
 	const ADMIN_PAGES = ['/schueler', '/lehrer'];
-	const showLessonInfo = $derived(!ADMIN_PAGES.includes(page.url.pathname));
+	// Im Fokus-Modus (Auftrag bearbeiten) ebenfalls ausblenden, damit der Editor ganz sichtbar ist.
+	const showLessonInfo = $derived(!ADMIN_PAGES.includes(page.url.pathname) && !ui.focus);
 
 	const studentLinks = NAV.filter((item) => !item.teacherOnly);
 
 	let menuOpen = $state(false);
 	let gearAutoHide = $state(false);
+
+	// Schüler sehen die Ampel nur, solange das Lehrer-Gerät misst.
+	const showNoise = $derived(Boolean(noise?.enabled) && (isTeacher || noiseState.active));
 
 	onMount(() => {
 		try {
@@ -37,12 +43,14 @@
 		} catch {
 			// Kein localStorage verfügbar – Standard bleibt.
 		}
+		if (!isTeacher && noise?.enabled) return watchRemoteNoise();
 	});
 </script>
 
 <header class="topbar">
 	<div class="left">
-		<div class="top-row">
+		<!-- Zahnrad und Logo in einer gemeinsamen Leiste -->
+		<div class="brandbar">
 			{#if isTeacher}
 				<button
 					class="gear"
@@ -50,10 +58,12 @@
 					class:autohide={gearAutoHide}
 					aria-label="Menü"
 					aria-expanded={menuOpen}
+					title="Menü"
 					onclick={() => (menuOpen = !menuOpen)}
 				>
-					<Icon name="gear" size={30} />
+					<Icon name="gear" size={24} />
 				</button>
+				<span class="divider" aria-hidden="true"></span>
 			{/if}
 			<a href="/" class="brand" aria-label="classRoom – zur Startseite">
 				<img src={logo} alt="" width="40" height="40" />
@@ -84,9 +94,11 @@
 			<TimeBars {settings} {warnMinutes} />
 		</div>
 
+		<!-- Ampel und Uhr in einer gemeinsamen Karte, passend zur Leiste oben links -->
 		<div class="right">
-			{#if isTeacher && noise?.enabled}
-				<NoiseLight />
+			{#if showNoise}
+				<NoiseLight remote={!isTeacher} />
+				<span class="divider tall" aria-hidden="true"></span>
 			{/if}
 			<AnalogClock />
 		</div>
@@ -106,12 +118,17 @@
 		padding: 20px 24px 28px;
 	}
 
-	/* Senkrechte Ampel links neben der Uhr – so bleibt die Kopfzeile gleich hoch. */
+	/* Senkrechte Ampel links neben der Uhr, beide in einer Karte im Stil der Logo-Leiste. */
 	.right {
 		justify-self: end;
 		display: flex;
-		align-items: flex-start;
-		gap: clamp(12px, 1.4vw, 24px);
+		align-items: center;
+		gap: clamp(14px, 1.4vw, 24px);
+		padding: clamp(12px, 1.2vw, 18px) clamp(14px, 1.4vw, 22px);
+		border: 1px solid var(--border);
+		border-radius: 20px;
+		background: var(--surface);
+		box-shadow: var(--shadow);
 	}
 
 	.left {
@@ -121,28 +138,53 @@
 		gap: 14px;
 	}
 
-	.top-row {
-		display: flex;
+	/* Eine Leiste für Menü-Knopf und Logo, im Stil der übrigen Karten. */
+	.brandbar {
+		display: inline-flex;
 		align-items: center;
-		gap: 14px;
+		gap: 8px;
+		padding: 6px 16px 6px 6px;
+		border: 1px solid var(--border);
+		border-radius: 16px;
+		background: var(--surface);
+		box-shadow: var(--shadow);
+	}
+
+	/* Ohne Zahnrad (Schüler) gleichmäßiger Rand. */
+	.brandbar:not(:has(.gear)) {
+		padding-left: 12px;
+	}
+
+	.divider {
+		width: 1px;
+		height: 28px;
+		background: var(--border);
+	}
+
+	.divider.tall {
+		align-self: stretch;
+		height: auto;
+		margin: 8px 0;
 	}
 
 	.brand {
 		display: inline-flex;
 		align-items: center;
 		gap: 10px;
+		padding: 2px 4px;
+		border-radius: 10px;
 		color: var(--text);
 		text-decoration: none;
 	}
 
 	.brand img {
-		width: 40px;
-		height: 40px;
+		width: 38px;
+		height: 38px;
 		border-radius: 9px;
 	}
 
 	.wordmark {
-		font-size: 1.5rem;
+		font-size: 1.4rem;
 		font-weight: 800;
 		letter-spacing: -0.01em;
 	}
@@ -155,21 +197,23 @@
 	.gear {
 		display: grid;
 		place-items: center;
-		width: 58px;
-		height: 58px;
+		width: 44px;
+		height: 44px;
 		padding: 0;
-		border-radius: 50%;
-		background: var(--surface);
-		box-shadow: var(--shadow);
+		border: 0;
+		border-radius: 12px;
+		background: transparent;
 		color: var(--muted);
 		transition:
 			opacity 0.25s,
 			transform 0.3s,
-			color 0.2s;
+			color 0.2s,
+			background 0.2s;
 	}
 
 	.gear:hover,
 	.gear.open {
+		background: var(--accent-soft);
 		color: var(--accent);
 	}
 

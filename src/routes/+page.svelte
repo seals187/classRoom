@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { autoRefresh } from '#lib/refresh.js';
 	import AssignmentBox from '#lib/components/AssignmentBox.svelte';
+	import { ui } from '#lib/ui.svelte.js';
 
 	let { data } = $props();
 
@@ -15,10 +16,12 @@
 <div class="home">
 	<AssignmentBox assignment={data.assignment} canEdit={data.user?.role === 'teacher'} />
 
-	<a class="goals-button" href="/stundenziele">
-		Stundenziele
-		<span aria-hidden="true">→</span>
-	</a>
+	{#if !ui.focus}
+		<a class="goals-button" href="/stundenziele">
+			Stundenziele
+			<span aria-hidden="true">→</span>
+		</a>
+	{/if}
 </div>
 
 <style>

@@ -26,6 +26,55 @@ let stream = null;
 let timer = null;
 let smoothed = 0;
 let heldUntil = 0;
+let lastSent = 0;
+/** @type {NoiseStatus | null} */
+let lastSentStatus = null;
+
+const SEND_EVERY_MS = 4000; // Lebenszeichen an den Server, auch ohne Farbwechsel
+const POLL_MS = 1500;
+
+/**
+ * Nur die Ampelfarbe an den Server melden, damit Schüler sie sehen – kein Ton.
+ * @param {boolean} active
+ */
+function sendStatus(active) {
+	lastSent = performance.now();
+	lastSentStatus = active ? noise.status : null;
+	fetch('/api/noise/status', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ active, status: noise.status }),
+		keepalive: true
+	}).catch(() => {
+		// Netzwerkfehler: nächster Versuch beim nächsten Lebenszeichen
+	});
+}
+
+/**
+ * Schüler-Ansicht: Ampelfarbe vom Lehrer-Gerät regelmäßig abholen.
+ * @returns {() => void} Aufräumfunktion
+ */
+export function watchRemoteNoise() {
+	let stopped = false;
+	async function poll() {
+		if (document.hidden) return;
+		try {
+			const res = await fetch('/api/noise/status');
+			if (!res.ok || stopped) return;
+			const data = await res.json();
+			noise.active = Boolean(data.active);
+			noise.status = data.status;
+		} catch {
+			// kurz offline – beim nächsten Mal wieder
+		}
+	}
+	poll();
+	const id = setInterval(poll, POLL_MS);
+	return () => {
+		stopped = true;
+		clearInterval(id);
+	};
+}
 
 /** @param {Partial<typeof config>} next */
 export function setNoiseConfig(next) {
@@ -112,6 +161,7 @@ export async function startNoise() {
 			if (RANK[next] > 0 && next !== noise.status) heldUntil = now + HOLD_MS;
 			noise.status = next;
 		}
+		if (noise.status !== lastSentStatus || now - lastSent > SEND_EVERY_MS) sendStatus(true);
 	}, 100);
 }
 
@@ -127,4 +177,5 @@ export function stopNoise() {
 	noise.level = 0;
 	noise.status = 'green';
 	rememberAuto(false);
+	sendStatus(false);
 }

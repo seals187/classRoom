@@ -6,9 +6,13 @@
 	const LAMPS = ['red', 'yellow', 'green'];
 	const LABELS = { red: 'Zu laut', yellow: 'Etwas leiser', green: 'Gut' };
 
+	/** @type {{ remote?: boolean }} */
+	// remote: Schüler-Ansicht – zeigt nur die Farbe vom Lehrer-Gerät, ohne eigenes Mikrofon.
+	let { remote = false } = $props();
+
 	// War die Ampel schon einmal an, ohne erneuten Klick starten (Erlaubnis ist dann bereits erteilt).
 	onMount(() => {
-		if (!noise.active && wantsAutoStart()) startNoise();
+		if (!remote && !noise.active && wantsAutoStart()) startNoise();
 	});
 </script>
 
@@ -22,7 +26,7 @@
 		{#each LAMPS as color (color)}
 			<span class="lamp {color}" class:on={noise.active && noise.status === color}></span>
 		{/each}
-		{#if !noise.active}
+		{#if !noise.active && !remote}
 			<button class="start" onclick={startNoise} title="Mikrofon für die Lautstärke-Ampel einschalten">
 				🎤 Ampel starten
 			</button>
