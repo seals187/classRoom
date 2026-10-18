@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/banner2.svg" alt="classRoom" width="100%"></p>
+<p align="center"><img src="assets/banner3.png" alt="classRoom – Der Werkzeugkasten für den Unterricht" width="100%"></p>
 
 # classRoom
 
@@ -115,7 +115,7 @@ Fertige Images (amd64 und arm64) gibt es unter `ghcr.io/seals187/classroom`. Es 
 ```yaml
 services:
   classroom:
-    image: ghcr.io/seals187/classroom:0.1.0
+    image: ghcr.io/seals187/classroom:0.2.0
     env_file: .env
     environment:
       PORT: 3000
