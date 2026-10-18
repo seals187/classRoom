@@ -85,10 +85,6 @@ docker compose up -d
 
 Fertig – classRoom läuft unter **http://localhost:3000** (bzw. `http://<server-ip>:3000`). Mit dem Lehrerkonto anmelden und unter *Menü → Schüler verwalten* die Klasse anlegen.
 
-> [!NOTE]
-> Solange das Repository privat ist, ist auch das Image privat. Einmalig mit einem GitHub-Token (Recht `read:packages`) anmelden:
-> `echo <TOKEN> | docker login ghcr.io -u seals187 --password-stdin`
-
 > [!TIP]
 > Für die Lautstärke-Ampel braucht der Browser **HTTPS** (oder `localhost`). Im Schulnetz am einfachsten hinter einen Reverse Proxy wie Caddy oder Traefik stellen.
 
