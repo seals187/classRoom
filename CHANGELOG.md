@@ -2,6 +2,11 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [0.2.3] – 2026-10-18
+
+### Geändert
+- Menü auf Smartphone und Tablet: „Angemeldet als …“ und **Abmelden** stehen direkt unter den Einstellungen statt ganz unten – kein Scrollen mehr nötig
+
 ## [0.2.2] – 2026-10-18
 
 ### Neu
@@ -55,6 +60,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.2.3]: https://github.com/seals187/classRoom/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/seals187/classRoom/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/seals187/classRoom/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/seals187/classRoom/compare/v0.1.0...v0.2.0

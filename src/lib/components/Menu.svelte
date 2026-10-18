@@ -467,4 +467,12 @@
 		font-size: 0.82rem;
 		color: var(--muted);
 	}
+
+	/* Smartphone/Tablet: Abmelden direkt unter den Einstellungen statt ganz unten –
+	   dort liegt es sonst oft hinter der Browserleiste und man müsste scrollen. */
+	@media (max-width: 900px), (hover: none) {
+		.logout {
+			margin-top: 0;
+		}
+	}
 </style>

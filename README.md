@@ -91,7 +91,7 @@ cp .env.example .env
 
 | Variable | Bedeutung | Standard |
 |---|---|---|
-| `CLASSROOM_VERSION` | Version des Docker-Images, z. B. `0.2.2` | `latest` |
+| `CLASSROOM_VERSION` | Version des Docker-Images, z. B. `0.2.3` | `latest` |
 | `PORT` | Port der App | `3000` |
 | `DATABASE_PATH` | Pfad der SQLite-Datei (nur lokal; im Container fest `/app/data`) | `data/classroom.db` |
 | `TEACHER_USERNAME` | Benutzername des Lehrerkontos aus der `.env` | `lehrer` |
@@ -119,7 +119,7 @@ Fertige Images (amd64 und arm64) gibt es unter `ghcr.io/seals187/classroom`. Auf
 ```bash
 mkdir -p /opt/classRoom && cd /opt/classRoom
 # docker-compose.yml und .env.example aus dem Repo hierher kopieren
-cp .env.example .env   # TEACHER_PASSWORD setzen, optional CLASSROOM_VERSION=0.2.2
+cp .env.example .env   # TEACHER_PASSWORD setzen, optional CLASSROOM_VERSION=0.2.3
 docker compose pull && docker compose up -d
 ```
 
@@ -156,5 +156,5 @@ npm run build && npm start   # Produktionsbuild
 ## Releases & Updates
 
 - **Änderungen** pro Version stehen im [CHANGELOG](CHANGELOG.md).
-- **Release erstellen:** Version in `package.json` anheben, Abschnitt in `CHANGELOG.md` ergänzen, committen und einen Tag pushen, z. B. `git tag v0.2.2 && git push origin v0.2.2`. GitHub Actions baut dann das Docker-Image, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release mit dem Text aus dem CHANGELOG an.
+- **Release erstellen:** Version in `package.json` anheben, Abschnitt in `CHANGELOG.md` ergänzen, committen und einen Tag pushen, z. B. `git tag v0.2.3 && git push origin v0.2.3`. GitHub Actions baut dann das Docker-Image, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release mit dem Text aus dem CHANGELOG an.
 - **Abhängigkeiten:** Dependabot prüft wöchentlich npm-Pakete, das Docker-Basis-Image und die GitHub Actions und öffnet bei Updates Pull Requests.
