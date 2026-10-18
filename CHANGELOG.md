@@ -2,6 +2,20 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [Unveröffentlicht]
+
+### Neu
+- **Stundenziele und Selbstlernen neu gestaltet** – ruhig, 20–30 Schüler ohne Scrollen auf 1280×720
+  - Kopfband mit Zeitbalken (vorbei / noch …), Klassen-Fortschritt, Digitaluhr und kleiner Ampel (Klick startet/stoppt)
+  - Kompaktes Raster; aufgeklappte Kacheln werden nach unten länger, die anderen rücken nach
+  - Sortierung: Name oder Fortschritt (Stundenziele), „zuletzt aktiv“ oder Name (Selbstlernen)
+  - Selbstlernen: aktuelles Ziel und Zeit seit dem letzten Abhaken; nach 15 min ohne Abhaken orange markiert
+  - Eigene Akzentfarbe je Seite (Blau / Lila), Grün für fertig; hell und dunkel
+- Datenbank merkt sich pro Schüler den Zeitpunkt des letzten Abhakens (Migration läuft automatisch)
+
+### Geändert
+- Ampel-Einstellungen: „Ampel neben der Uhr anzeigen“ statt „unter der Uhr“
+
 ## [0.2.3] – 2026-10-18
 
 ### Geändert

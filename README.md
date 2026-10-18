@@ -27,10 +27,12 @@ Ein Werkzeugkasten für Lehrerinnen und Lehrer: verschiedene kleine Tools, die s
 
 ### Stundenziele & Selbstlern-Modus
 
-- Eine Kachel pro Schüler mit Zielen zum Abhaken und Fortschrittsbalken
-- Erledigte Ziele werden grün, die Kachel ist ganz grün, wenn alles erledigt ist
-- Kompakt für große Klassen (20+ Schüler): Kacheln standardmäßig eingeklappt (nur Name + Fortschritt), einzeln oder für Lehrkräfte per Knopf **alle auf-/einklappen**
-- Übersicht über der Klasse, z. B. „12/60 Ziele erledigt · 3 von 20 Schülern fertig“
+- Ruhiges Layout für den Beamer: 20–30 Schüler passen ohne Scrollen auf einen Bildschirm (ab 1280×720)
+- **Kopfband** statt großer Uhr: Zeitbalken (vorbei / noch … bis zur Rückkehr, orange kurz vor Schluss, rot wenn um), Klassen-Fortschritt („45/96 Ziele · 3 von 24 fertig“), Digitaluhr mit Datum und kleine Ampel
+- Eine Kachel pro Schüler: Name, erledigt/gesamt und Fortschrittsbalken; Klick klappt die Checkliste auf, die übrigen Kacheln rücken nach
+- Fertige Schüler: Kachel grün mit ✓; erledigte Ziele grün abgehakt und durchgestrichen
+- Sortierung nach Name oder Fortschritt (Stundenziele) bzw. „zuletzt aktiv“ (Selbstlernen); Lehrkräfte können **alle auf-/einklappen**
+- **Selbstlernen:** zeigt das aktuelle Ziel und die Zeit seit dem letzten Abhaken; nach 15 min ohne Fortschritt wird die Kachel orange
 - Schüler bearbeiten nur ihre eigene Kachel; die Seite aktualisiert sich alle 5 Sekunden
 - **Stundenziele** und **Selbstlern-Ziele** sind getrennt; „Neue Stunde“ leert nur die Stundenziele
 
@@ -104,7 +106,7 @@ cp .env.example .env
 | `DEFAULT_THEME` | Standard-Darstellung: `system`, `light` oder `dark` | `system` |
 | `GOALS_COLLAPSED` | Ziel-Kacheln standardmäßig eingeklappt (nur Name + Fortschritt) | `true` |
 | `UPLOAD_MAX_MB` | Maximale Bildgröße im Auftrag (PNG, JPEG, GIF, WebP) | `5` |
-| `NOISE_ENABLED` | Lautstärke-Ampel anzeigen (nur Lehrkräfte) | `true` |
+| `NOISE_ENABLED` | Lautstärke-Ampel anzeigen (misst auf dem Lehrer-Gerät, Schüler sehen die Farbe) | `true` |
 | `NOISE_SENSITIVITY` | Empfindlichkeit des Mikrofons, 1–10 | `5` |
 | `NOISE_YELLOW` / `NOISE_RED` | Pegel 0–100, ab dem die Ampel gelb bzw. rot wird | `50` / `75` |
 

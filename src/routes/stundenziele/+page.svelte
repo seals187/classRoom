@@ -1,5 +1,4 @@
 <script>
-	import PageTitle from '#lib/components/PageTitle.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { api } from '#lib/api.js';
 	import GoalBoard from '#lib/components/GoalBoard.svelte';
@@ -28,56 +27,52 @@
 	<title>Stundenziele · classRoom</title>
 </svelte:head>
 
-<div class="page-head">
-	<div>
-		<PageTitle href="/stundenziele">Stundenziele</PageTitle>
+<GoalBoard students={data.students} user={data.user} kind="lesson" collapsedByDefault={data.goalsCollapsed}>
+	{#snippet title()}
+		Stundenziele
 		{#if data.assignmentTitle}
-			<a class="sub" href="/">← {data.assignmentTitle}</a>
-		{:else}
-			<a class="sub" href="/">← zum Auftrag</a>
+			<a class="sub" href="/" title="Zum Auftrag">· {data.assignmentTitle}</a>
 		{/if}
-	</div>
-	{#if isTeacher}
-		<div class="new-lesson">
+	{/snippet}
+	{#snippet actions()}
+		{#if isTeacher}
 			<button
+				class="new-lesson"
 				onclick={newLesson}
-				aria-describedby="new-lesson-help"
 				title="Löscht die Stundenziele aller Schüler, damit die nächste Stunde mit leeren Kacheln beginnt. Selbstlern-Ziele und der Auftrag bleiben erhalten."
 			>
 				Neue Stunde
 			</button>
-			<small id="new-lesson-help">Leert alle Stundenziele · Selbstlern-Ziele bleiben</small>
-		</div>
-	{/if}
-</div>
-
-<GoalBoard students={data.students} user={data.user} kind="lesson" collapsedByDefault={data.goalsCollapsed} />
+		{/if}
+	{/snippet}
+</GoalBoard>
 
 <style>
-	.new-lesson {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
-		gap: 4px;
-	}
-
-	.new-lesson small {
+	.sub {
+		overflow: hidden;
 		color: var(--muted);
-		font-size: 0.8rem;
-		text-align: right;
+		font-size: 16px;
+		font-weight: 400;
+		text-decoration: none;
+		white-space: nowrap;
+		text-overflow: ellipsis;
 	}
 
-	/* Unter dem Titel umgebrochen: linksbündig statt rechts. */
-	@media (max-width: 640px) {
-		.new-lesson {
-			flex-direction: row;
-			flex-wrap: wrap;
-			align-items: center;
-			gap: 6px 10px;
-		}
+	.sub:hover {
+		color: var(--lesson-accent);
+	}
 
-		.new-lesson small {
-			text-align: left;
-		}
+	/* Dezent neben „Alle aufklappen“. */
+	.new-lesson {
+		padding: 3px 10px;
+		border-radius: 999px;
+		background: transparent;
+		color: var(--muted);
+		font-size: 13px;
+	}
+
+	.new-lesson:hover {
+		border-color: var(--danger);
+		color: var(--danger);
 	}
 </style>

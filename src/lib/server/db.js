@@ -62,6 +62,16 @@ function migrate(db) {
 		db.exec("ALTER TABLE goals ADD COLUMN kind TEXT NOT NULL DEFAULT 'self'");
 	}
 	db.exec('CREATE INDEX IF NOT EXISTS goals_student_kind ON goals(student_id, kind)');
+	// Zeitpunkte (ms seit 1970) für „seit X min nichts abgehakt“ im Selbstlern-Modus.
+	if (!goalColumns.some((c) => c.name === 'created_at')) {
+		db.exec('ALTER TABLE goals ADD COLUMN created_at INTEGER');
+	}
+	const studentColumns = /** @type {{ name: string }[]} */ (db.prepare('PRAGMA table_info(students)').all());
+	for (const kind of ['lesson', 'self']) {
+		if (!studentColumns.some((c) => c.name === `last_check_${kind}`)) {
+			db.exec(`ALTER TABLE students ADD COLUMN last_check_${kind} INTEGER`);
+		}
+	}
 
 	const assignmentColumns = /** @type {{ name: string }[]} */ (db.prepare('PRAGMA table_info(assignment)').all());
 	if (!assignmentColumns.some((c) => c.name === 'images')) {
@@ -286,7 +296,10 @@ export function clearTest() {
 // --- Schüler & Ziele ---
 
 /** @typedef {{ id: number, text: string, done: boolean }} Goal */
-/** @typedef {{ id: number, firstName: string, lastName: string, username: string | null, goals: Goal[] }} Student */
+/**
+ * `activeAt`: letztes Abhaken dieser Zielart, sonst Zeitpunkt des ersten Ziels (ms) – für „seit X min“.
+ * @typedef {{ id: number, firstName: string, lastName: string, username: string | null, goals: Goal[], activeAt: number | null }} Student
+ */
 /** @typedef {{ username: string, password: string }} Credentials */
 
 /**
@@ -295,21 +308,33 @@ export function clearTest() {
  */
 export function listStudents(kind = 'self') {
 	const db = getDb();
-	const students = /** @type {Omit<Student, 'goals'>[]} */ (
+	const lastCheck = goalKind(kind) === 'lesson' ? 's.last_check_lesson' : 's.last_check_self';
+	const students = /** @type {(Omit<Student, 'goals' | 'activeAt'> & { lastCheck: number | null })[]} */ (
 		db
 			.prepare(
-				`SELECT s.id, s.first_name AS firstName, s.last_name AS lastName, u.username
+				`SELECT s.id, s.first_name AS firstName, s.last_name AS lastName, u.username, ${lastCheck} AS lastCheck
 				 FROM students s LEFT JOIN users u ON u.student_id = s.id
 				 ORDER BY s.last_name COLLATE NOCASE, s.first_name COLLATE NOCASE`
 			)
 			.all()
 	);
-	const goals = /** @type {{ id: number, studentId: number, text: string, done: number }[]} */ (
-		db.prepare('SELECT id, student_id AS studentId, text, done FROM goals WHERE kind = ? ORDER BY position, id').all(kind)
+	const goals = /** @type {{ id: number, studentId: number, text: string, done: number, createdAt: number | null }[]} */ (
+		db
+			.prepare(
+				'SELECT id, student_id AS studentId, text, done, created_at AS createdAt FROM goals WHERE kind = ? ORDER BY position, id'
+			)
+			.all(kind)
 	);
 	/** @type {Map<number, Student>} */
-	const byId = new Map(students.map((s) => [s.id, { ...s, goals: [] }]));
-	for (const g of goals) byId.get(g.studentId)?.goals.push({ id: g.id, text: g.text, done: g.done === 1 });
+	const byId = new Map(students.map(({ lastCheck, ...s }) => [s.id, { ...s, goals: [], activeAt: lastCheck }]));
+	/** @type {Map<number, number>} frühestes Ziel je Schüler */
+	const firstGoal = new Map();
+	for (const g of goals) {
+		byId.get(g.studentId)?.goals.push({ id: g.id, text: g.text, done: g.done === 1 });
+		if (g.createdAt !== null) firstGoal.set(g.studentId, Math.min(firstGoal.get(g.studentId) ?? g.createdAt, g.createdAt));
+	}
+	// Noch nie abgehakt → ab dem ersten Ziel zählen.
+	for (const s of byId.values()) s.activeAt ??= firstGoal.get(s.id) ?? null;
 	return [...byId.values()];
 }
 
@@ -336,7 +361,7 @@ export function addStudent(input) {
 			hashPassword(password),
 			id
 		);
-		return { student: { id, firstName, lastName, username, goals: [] }, credentials: { username, password } };
+		return { student: { id, firstName, lastName, username, goals: [], activeAt: null }, credentials: { username, password } };
 	})();
 }
 
@@ -448,10 +473,10 @@ export function addGoal(studentId, input) {
 	if (!db.prepare('SELECT 1 FROM students WHERE id = ?').get(studentId)) error(404, 'Schüler nicht gefunden');
 	const { lastInsertRowid } = db
 		.prepare(
-			`INSERT INTO goals (student_id, text, kind, position)
-			 VALUES (?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM goals WHERE student_id = ?))`
+			`INSERT INTO goals (student_id, text, kind, position, created_at)
+			 VALUES (?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM goals WHERE student_id = ?), ?)`
 		)
-		.run(studentId, text, kind, studentId);
+		.run(studentId, text, kind, studentId, Date.now());
 	return { id: Number(lastInsertRowid), text, done: false };
 }
 
@@ -470,13 +495,21 @@ export function clearGoals(kind) {
  * @returns {Goal}
  */
 export function updateGoal(id, input) {
-	const current = /** @type {{ text: string, done: number } | undefined} */ (
-		getDb().prepare('SELECT text, done FROM goals WHERE id = ?').get(id)
+	const db = getDb();
+	const current = /** @type {{ text: string, done: number, kind: string, studentId: number } | undefined} */ (
+		db.prepare('SELECT text, done, kind, student_id AS studentId FROM goals WHERE id = ?').get(id)
 	);
 	if (!current) error(404, 'Ziel nicht gefunden');
 	const text = input.text === undefined ? current.text : requiredText(input.text, 'Ziel', 200);
 	const done = input.done === undefined ? current.done === 1 : Boolean(input.done);
-	getDb().prepare('UPDATE goals SET text = ?, done = ? WHERE id = ?').run(text, done ? 1 : 0, id);
+	db.transaction(() => {
+		db.prepare('UPDATE goals SET text = ?, done = ? WHERE id = ?').run(text, done ? 1 : 0, id);
+		// Zeitpunkt des letzten Abhakens pro Schüler und Art merken.
+		if (done && current.done !== 1) {
+			const column = current.kind === 'lesson' ? 'last_check_lesson' : 'last_check_self';
+			db.prepare(`UPDATE students SET ${column} = ? WHERE id = ?`).run(Date.now(), current.studentId);
+		}
+	})();
 	return { id, text, done };
 }
 

@@ -161,7 +161,7 @@
 				<form onsubmit={saveNoise}>
 					<label class="inline">
 						<input type="checkbox" bind:checked={noiseForm.enabled} />
-						Ampel unter der Uhr anzeigen
+						Ampel neben der Uhr anzeigen
 					</label>
 					<label class="field" title="Höher = reagiert schon auf leisere Geräusche">
 						Empfindlichkeit

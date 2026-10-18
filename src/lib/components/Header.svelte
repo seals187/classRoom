@@ -26,8 +26,11 @@
 
 	// Verwaltungsseiten brauchen keine Unterrichtsanzeigen – nur Menü und Logo.
 	const ADMIN_PAGES = ['/schueler', '/lehrer'];
+	// Ziel-Seiten haben ein eigenes Kopfband (LessonBand) – dort nur die schmale Logo-Zeile.
+	const GOAL_PAGES = ['/stundenziele', '/selbstlernen'];
+	const compact = $derived(GOAL_PAGES.includes(page.url.pathname));
 	// Im Fokus-Modus (Auftrag bearbeiten) ebenfalls ausblenden, damit der Editor ganz sichtbar ist.
-	const showLessonInfo = $derived(!ADMIN_PAGES.includes(page.url.pathname) && !ui.focus);
+	const showLessonInfo = $derived(!ADMIN_PAGES.includes(page.url.pathname) && !GOAL_PAGES.includes(page.url.pathname) && !ui.focus);
 
 	const studentLinks = NAV.filter((item) => !item.teacherOnly);
 
@@ -47,7 +50,7 @@
 	});
 </script>
 
-<header class="topbar">
+<header class="topbar" class:compact>
 	<div class="left">
 		<!-- Zahnrad und Logo in einer gemeinsamen Leiste -->
 		<div class="brandbar">
@@ -116,6 +119,36 @@
 		align-items: start;
 		gap: 24px;
 		padding: 20px 24px 28px;
+	}
+
+	/* Ziel-Seiten: nur eine schmale Zeile mit Logo bzw. Schüler-Navigation nebeneinander. */
+	.topbar.compact {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 10px 16px;
+		padding: 10px 24px 10px;
+	}
+
+	.compact .left {
+		flex-direction: row;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 10px 16px;
+	}
+
+	.compact .me {
+		flex-direction: row;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px 14px;
+		padding: 6px 12px;
+	}
+
+	.compact .me nav {
+		flex-direction: row;
+		flex-wrap: wrap;
+		align-self: auto;
 	}
 
 	/* Senkrechte Ampel links neben der Uhr, beide in einer Karte im Stil der Logo-Leiste. */
