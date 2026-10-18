@@ -193,27 +193,36 @@ export function getSettings() {
 		getDb().prepare('SELECT key, value FROM settings').all()
 	);
 	const stored = Object.fromEntries(rows.filter((r) => r.key in defaults).map((r) => [r.key, r.value]));
-	return { ...defaults, ...stored };
+	const roomChange = 'roomChange' in stored ? stored.roomChange === '1' : defaults.roomChange;
+	return { ...defaults, ...stored, roomChange };
 }
 
-/** @param {Record<string, unknown>} input */
+/**
+ * Raum und Raumwechsel sind optional – fehlen sie, bleiben die bisherigen Werte.
+ * @param {Record<string, unknown>} input
+ */
 export function saveSettings(input) {
+	const current = getSettings();
+	const roomChange = input.roomChange === undefined ? current.roomChange : input.roomChange === true;
+	const roomInput = typeof input.roomName === 'string' ? input.roomName.trim() : '';
 	const settings = {
-		roomName: requiredText(input.roomName, 'Klassenraum', 60),
+		// Den Raum braucht es nur mit Raumwechsel; ohne bleibt der bisherige stehen.
+		roomName: roomChange ? requiredText(input.roomName ?? current.roomName, 'Raum', 60) : roomInput.slice(0, 60) || current.roomName,
+		roomChange,
 		startTime: optionalTime(input.startTime, 'Beginn'),
-		returnTime: optionalTime(input.returnTime, 'Zurück um')
+		returnTime: optionalTime(input.returnTime, 'Ende')
 	};
 	const upsert = getDb().prepare(
 		'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
 	);
 	getDb().transaction(() => {
-		for (const [key, value] of Object.entries(settings)) upsert.run(key, value);
+		for (const [key, value] of Object.entries(settings)) upsert.run(key, typeof value === 'boolean' ? (value ? '1' : '0') : value);
 	})();
 	return settings;
 }
 
 export function resetSettings() {
-	getDb().prepare("DELETE FROM settings WHERE key IN ('roomName', 'startTime', 'returnTime')").run();
+	getDb().prepare("DELETE FROM settings WHERE key IN ('startTime', 'returnTime')").run();
 	return getSettings();
 }
 
@@ -498,27 +507,52 @@ export function addGoal(studentId, input) {
  * Ziele, die ein Schüler mit gleichem Text schon hat, werden übersprungen.
  * @param {unknown} texts
  * @param {unknown} kind
- * @param {boolean} [replace] vorher alle Ziele dieser Art löschen
+ * @param {boolean} [replace] vorher alle Ziele dieser Art löschen (bei den gewählten Schülern)
+ * @param {number[] | null} [studentIds] nur diese Schüler, sonst alle
  */
-export function addGoalsToAll(texts, kind, replace = false) {
+export function addGoalsToAll(texts, kind, replace = false, studentIds = null) {
 	if (!Array.isArray(texts) || texts.length === 0 || texts.length > 30) error(400, 'Keine Ziele angegeben');
 	const list = [...new Set(texts.map((t) => requiredText(t, 'Ziel', 200)))];
 	const k = goalKind(kind);
 	const db = getDb();
-	const students = /** @type {{ id: number }[]} */ (db.prepare('SELECT id FROM students').all());
+	const all = /** @type {{ id: number }[]} */ (db.prepare('SELECT id FROM students').all());
+	// Nur ausgewählte Schüler („Einzelne…“) – unbekannte IDs fallen weg.
+	const students = Array.isArray(studentIds) ? all.filter((s) => studentIds.includes(s.id)) : all;
+	if (students.length === 0) error(400, 'Keine Schüler ausgewählt');
 	const exists = db.prepare('SELECT 1 FROM goals WHERE student_id = ? AND kind = ? AND text = ?');
-	let added = 0;
+	/** @type {number[]} */
+	const goalIds = [];
 	db.transaction(() => {
-		if (replace) clearGoals(k);
+		if (replace && students.length === all.length) clearGoals(k);
+		else if (replace) {
+			for (const { id } of students) {
+				db.prepare('DELETE FROM goals WHERE student_id = ? AND kind = ?').run(id, k);
+				db.prepare(`UPDATE students SET last_check_${k} = NULL WHERE id = ?`).run(id);
+			}
+		}
 		for (const { id } of students) {
 			for (const text of list) {
 				if (exists.get(id, k, text)) continue;
-				addGoal(id, { text, kind: k });
-				added++;
+				goalIds.push(addGoal(id, { text, kind: k }).id);
 			}
 		}
 	})();
-	return { added, students: students.length };
+	return { added: goalIds.length, students: students.length, goalIds };
+}
+
+/**
+ * Mehrere Ziele auf einmal löschen („Rückgängig“ nach dem Senden).
+ * @param {unknown} ids
+ */
+export function deleteGoals(ids) {
+	if (!Array.isArray(ids) || ids.some((id) => !Number.isInteger(id))) error(400, 'Ungültige Ziele');
+	const db = getDb();
+	const del = db.prepare('DELETE FROM goals WHERE id = ?');
+	let deleted = 0;
+	db.transaction(() => {
+		for (const id of ids) deleted += del.run(id).changes;
+	})();
+	return { deleted };
 }
 
 /**

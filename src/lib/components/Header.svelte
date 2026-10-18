@@ -6,7 +6,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { api } from '#lib/api.js';
 	import { showError } from '#lib/dialog.svelte.js';
-	import { atToday, formatClock, pad } from '#lib/time.js';
+	import { formatClock, lessonSpan, pad } from '#lib/time.js';
 	import logo from '#lib/assets/logo.svg';
 	import Icon from './Icon.svelte';
 	import Menu from './Menu.svelte';
@@ -16,12 +16,13 @@
 	 * Digitaluhr und kleine Ampel. Auf den Verwaltungsseiten nur Menü-Knopf und Logo.
 	 * @type {{
 	 *   user: import('#lib/server/auth.js').User,
-	 *   settings: { roomName: string, startTime: string, returnTime: string },
+	 *   settings: { roomName: string, roomChange: boolean, startTime: string, returnTime: string },
 	 *   warnMinutes: number,
+	 *   goMinutes?: number,
 	 *   noise: import('#lib/server/db.js').NoiseSettings | { enabled: boolean } | null
 	 * }}
 	 */
-	let { user, settings, warnMinutes, noise: noiseSettings } = $props();
+	let { user, settings, warnMinutes, goMinutes = 3, noise: noiseSettings } = $props();
 
 	const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
 	const LAMPS = /** @type {const} */ (['red', 'yellow', 'green']);
@@ -42,25 +43,42 @@
 	let menuOpen = $state(false);
 
 	const now = $derived(clock.now);
-	const start = $derived(now && settings.startTime ? atToday(settings.startTime, now) : null);
-	const end = $derived(now && settings.returnTime ? atToday(settings.returnTime, now) : null);
+	// Auch über Mitternacht richtig (z. B. 23:30 bis 00:15).
+	const span = $derived(now ? lessonSpan(settings.startTime, settings.returnTime, now) : { start: null, end: null });
+	const start = $derived(span.start);
+	const end = $derived(span.end);
 	const elapsed = $derived(now && start ? Math.max(0, now.getTime() - start.getTime()) : 0);
 	const remaining = $derived(now && end ? end.getTime() - now.getTime() : null);
 	const total = $derived(start && end && end > start ? end.getTime() - start.getTime() : null);
 	const progress = $derived(remaining !== null && remaining <= 0 ? 1 : total ? Math.min(1, elapsed / total) : 0);
+	// Vier Phasen: arbeiten → aufräumen (WARN_MINUTES) → losgehen (GO_MINUTES) → Zeit um.
 	const status = $derived(
-		remaining === null ? '' : remaining <= 0 ? 'over' : remaining <= warnMinutes * 60000 ? 'soon' : ''
+		remaining === null
+			? ''
+			: remaining <= 0
+				? 'over'
+				: remaining <= goMinutes * 60000
+					? 'go'
+					: remaining <= warnMinutes * 60000
+						? 'soon'
+						: ''
 	);
-
-	// Drei Phasen: arbeiten → bald zurück (WARN_MINUTES) → Zeit um.
+	// Losgehen und Zeit um: groß in der Mitte, mit Tür, wenn es in einen anderen Raum geht.
+	const callout = $derived(status === 'go' || status === 'over');
 	const phase = $derived(
 		status === 'over'
-			? 'Zurück ins Klassenzimmer'
-			: status === 'soon'
-				? 'Bald Rückkehr – aufräumen'
-				: now && start && now < start
-					? `Beginnt um ${short(settings.startTime)}`
-					: 'Arbeitsphase'
+			? settings.roomChange
+				? `Sofort zurück in ${settings.roomName}!`
+				: 'Zeit um – die Stunde ist zu Ende'
+			: status === 'go'
+				? settings.roomChange
+					? `Jetzt zurück in ${settings.roomName}`
+					: 'Gleich Schluss – zusammenpacken'
+				: status === 'soon'
+					? 'Aufräumen'
+					: now && start && now < start
+						? `Beginnt um ${short(settings.startTime)}`
+						: 'Arbeitsphase'
 	);
 	const overMinutes = $derived(remaining !== null && remaining < 0 ? Math.floor(-remaining / 60000) : 0);
 	// Restzeit groß: „noch 40 min“ bzw. „noch 1:20 h“.
@@ -93,7 +111,7 @@
 	/** @param {string} hhmm */
 	const short = (hhmm) => hhmm.slice(0, 5);
 
-	// „Jetzt starten“: Beginn = jetzt, Rückkehr = jetzt + Dauer (Dauern aus LESSON_DURATIONS).
+	// „Jetzt starten“: Beginn = jetzt, Ende = jetzt + Dauer (Dauern aus LESSON_DURATIONS).
 	const durations = $derived(/** @type {number[]} */ (page.data.lessonDurations ?? [45, 90]));
 	let starting = $state(false);
 	let customOpen = $state(false);
@@ -141,7 +159,7 @@
 	});
 </script>
 
-<header class="band">
+<header class="band" class:go={status === 'go'} class:over={status === 'over'}>
 	<button
 		class="menu-btn"
 		class:open={menuOpen}
@@ -163,9 +181,21 @@
 		{#if settings.returnTime}
 			<div class="time {status}" class:inside={leftInside}>
 				<div class="meta">
-					<span>{settings.roomName}{#if settings.startTime}{` · Beginn ${short(settings.startTime)}`}{/if}</span>
-					<strong class="phase">{phase}</strong>
-					<span class="end">Rückkehr {short(settings.returnTime)}</span>
+					<span>{#if settings.startTime}Beginn {short(settings.startTime)}{/if}</span>
+					<!-- Phase klein in der Mitte, das Ziel („Zurück in … um …“) immer rechts -->
+					<strong class="phase" class:callout>
+						{#if status === 'soon'}<Icon name="broom" size={14} />{:else if callout && settings.roomChange}<Icon name="door" size={17} />{/if}
+						{phase}
+					</strong>
+					<span class="end">
+						{#if settings.roomChange}
+							<!-- Losgehen/Zeit um: der Raum steht schon groß in der Mitte, rechts nur noch die Uhrzeit -->
+							<Icon name="door" size={13} />
+							{#if callout}{short(settings.returnTime)}{:else}Zurück in <b>{settings.roomName}</b> um {short(settings.returnTime)}{/if}
+						{:else}
+							Ende {short(settings.returnTime)}
+						{/if}
+					</span>
 				</div>
 				<div
 					class="track"
@@ -203,7 +233,7 @@
 			</div>
 		{:else}
 			<div class="time placeholder">
-				<span class="not-started">{settings.roomName} · Stunde noch nicht gestartet</span>
+				<span class="not-started">Stunde noch nicht gestartet</span>
 				{#if isTeacher}
 					<div class="start">
 						{#each durations as minutes, i (minutes)}
@@ -291,6 +321,43 @@
 		box-shadow: var(--shadow);
 	}
 
+	/* Losgehen: kräftiger oranger Rand, pulsiert gut sichtbar (Schein + Tönung). Zeit um: roter Rand. */
+	.band.go {
+		border-color: var(--go);
+		animation: go-pulse 1.4s ease-in-out infinite;
+	}
+
+	.band.over {
+		border-color: var(--danger);
+		box-shadow:
+			0 0 0 1px var(--danger),
+			0 0 22px color-mix(in srgb, var(--danger) 30%, transparent);
+	}
+
+	@keyframes go-pulse {
+		0%,
+		100% {
+			background: var(--surface);
+			box-shadow:
+				0 0 0 2px var(--go),
+				0 0 6px color-mix(in srgb, var(--go) 25%, transparent);
+		}
+
+		50% {
+			background: color-mix(in srgb, var(--go) 14%, var(--surface));
+			box-shadow:
+				0 0 0 3px var(--go),
+				0 0 40px 6px color-mix(in srgb, var(--go) 70%, transparent);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.band.go {
+			animation: none;
+			box-shadow: 0 0 0 1px var(--go);
+		}
+	}
+
 	.menu-btn {
 		flex-shrink: 0;
 		display: grid;
@@ -357,14 +424,19 @@
 		--phase: var(--warn);
 	}
 
+	.time.go {
+		--phase: var(--go);
+	}
+
 	.time.over {
 		--phase: var(--danger);
 	}
 
 	.meta {
 		display: grid;
-		grid-template-columns: 1fr auto 1fr;
-		align-items: baseline;
+		/* Beginn links, Phase mittig im freien Platz, Ziel rechts immer ganz */
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		align-items: center;
 		gap: 12px;
 		color: var(--muted);
 		font-size: 13px;
@@ -381,14 +453,54 @@
 	}
 
 	.phase {
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		text-align: center;
 		color: var(--text);
 		font-size: 13px;
 		white-space: nowrap;
 	}
 
 	.soon .phase,
+	.go .phase,
 	.over .phase {
 		color: var(--phase);
+	}
+
+	/* Losgehen und Zeit um: groß in der Mitte */
+	.phase.callout {
+		font-size: 16px;
+		font-weight: 800;
+		line-height: 1.2;
+	}
+
+	.phase :global(svg) {
+		margin-right: 4px;
+		vertical-align: -2px;
+	}
+
+	.tick-labels {
+		position: relative;
+		height: 14px;
+		color: var(--muted);
+		font-size: 11px;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.tick-labels span {
+		position: absolute;
+		top: 0;
+		transform: translateX(-50%);
+		line-height: 14px;
+	}
+
+	.meta .end b {
+		color: var(--text);
+	}
+
+	.meta :global(svg) {
+		vertical-align: -2px;
 	}
 
 	.track {
@@ -483,21 +595,6 @@
 		color: #fff;
 		font-size: 16px;
 		font-weight: 800;
-	}
-
-	.tick-labels {
-		position: relative;
-		height: 14px;
-		color: var(--muted);
-		font-size: 11px;
-		font-variant-numeric: tabular-nums;
-	}
-
-	.tick-labels span {
-		position: absolute;
-		top: 0;
-		transform: translateX(-50%);
-		line-height: 14px;
 	}
 
 	.placeholder {

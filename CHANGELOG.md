@@ -2,6 +2,26 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [0.3.1] – 2026-10-19
+
+### Neu
+- **Zeitbalken in vier Phasen:** *Arbeitsphase* (blau) → *🧹 Aufräumen* (orange, ab `WARN_MINUTES`) → *🚪 Jetzt zurück in Raum 101* (groß, kräftig orange, Kopfband pulsiert deutlich, ab `GO_MINUTES`) → *🚪 Sofort zurück in Raum 101!* (rot, im Balken „Zeit um · +2 min“); rechts steht das Ziel „Zurück in Raum 101 um 22:23“, ohne Raumwechsel „Ende …“
+- **Menü „Unterrichtsstunde“ neu:** Beginn und Ende nebeneinander, Schnellknöpfe „Jetzt“, „+45 min“, „+90 min“, Schalter „Danach Raumwechsel“ mit Raumfeld nur bei Bedarf, Knopf „Stunde starten“ – läuft die Stunde schon: „Stunde aktualisieren“
+- **Laufende Stunde verlängern:** „+5 / +10 / +15 min“ im Menü verschieben das Ende sofort (ist die Zeit schon um, ab jetzt)
+- **Ziele aus dem Auftrag:** neues Fenster – als Stunden- oder Selbstlern-Ziele, für alle oder einzelne Schüler, Texte anpassen, per Ziehen sortieren, weitere Ziele ergänzen; bestehende Ziele bleiben oder werden ersetzt (Klick auf den Hinweis)
+- Nach dem Senden kurze Bestätigung mit **Rückgängig** und „Stundenziele öffnen“
+- Jeder Schritt im Auftrag zeigt, wie viele Schüler ihn erledigt haben (z. B. „✓ 7/11“, grün wenn alle fertig)
+- Neue `.env`-Variablen `DEFAULT_ROOM_CHANGE` (Standard `true`) und `GO_MINUTES` (Standard `3`)
+
+### Geändert
+- Über dem Balken steht links nur noch „Beginn …“, der Raum rechts beim Ziel
+- README-Banner neu: echte Screenshots mit Beispielklasse, scharf in doppelter Auflösung
+- **Neue Favicons:** Symbol im Browser-Tab (SVG, ICO, PNG), Apple-Touch-Icon und Web-App-Manifest für „Zum Startbildschirm hinzufügen“
+- **Login neu gestaltet:** Glas-Karte auf dunklem Hintergrund mit Farblicht, „Schön, dass du da bist.“, Passwort anzeigen (Auge), weißer Knopf „Anmelden →“, GitHub-Symbol zum Repository
+
+### Behoben
+- Stunden über Mitternacht (z. B. 23:30 bis 00:15) werden richtig angezeigt
+
 ## [0.3.0] – 2026-10-18
 
 Große Überarbeitung: neues Kopfband, Auftrag und Ziel-Seiten neu gestaltet, Hintergründe, eigene Dialoge.
@@ -98,6 +118,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.3.1]: https://github.com/seals187/classRoom/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/seals187/classRoom/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/seals187/classRoom/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/seals187/classRoom/compare/v0.2.1...v0.2.2

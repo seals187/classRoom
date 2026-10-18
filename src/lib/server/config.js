@@ -42,10 +42,14 @@ export function getConfig() {
 		databasePath: env.DATABASE_PATH || 'data/classroom.db',
 		defaults: {
 			roomName: env.DEFAULT_ROOM_NAME?.trim() || 'Klassenzimmer',
+			// Nach der Stunde zurück in den Raum (roomName)? Sonst zeigt der Balken nur „Ende“.
+			roomChange: env.DEFAULT_ROOM_CHANGE?.trim().toLowerCase() !== 'false',
 			startTime: timeOrEmpty(env.DEFAULT_START_TIME),
 			returnTime: timeOrEmpty(env.DEFAULT_RETURN_TIME)
 		},
+		// Zeitbalken: ab WARN_MINUTES vor Schluss „Aufräumen“, ab GO_MINUTES „Jetzt zurück“ (Losgehen).
 		warnMinutes: Math.max(0, Number(env.WARN_MINUTES) || 5),
+		goMinutes: intIn(env.GO_MINUTES, 0, 60, 3),
 		// Knöpfe „Jetzt starten“ im Kopfband (Minuten), der erste ist der Hauptknopf.
 		lessonDurations: parseDurations(env.LESSON_DURATIONS),
 		teacher: {

@@ -6,9 +6,20 @@
 	import { ask, askText, showError } from '#lib/dialog.svelte.js';
 	import { shrinkImage } from '#lib/shrink-image.js';
 	import Icon from './Icon.svelte';
+	import GoalsFromAssignment from './GoalsFromAssignment.svelte';
 
-	/** @type {{ assignment: import('#lib/server/assignment.js').Assignment, canEdit: boolean, studentCount?: number }} */
-	let { assignment, canEdit, studentCount = 0 } = $props();
+	/**
+	 * @type {{
+	 *   assignment: import('#lib/server/assignment.js').Assignment,
+	 *   canEdit: boolean,
+	 *   students?: { id: number, firstName: string, lastName: string }[],
+	 *   progress?: Record<string, { done: number, total: number }>
+	 * }}
+	 */
+	let { assignment, canEdit, students = [], progress = {} } = $props();
+
+	// Fenster „Ziele aus dem Auftrag“
+	let goalsOpen = $state(false);
 
 	// Kein Schwarz: Normaler Text passt sich dem Theme an, festes Schwarz wäre im Dunkelmodus unlesbar.
 	const COLORS = [
@@ -43,7 +54,6 @@
 	/** @type {HTMLElement | undefined} */
 	let sectionEl = $state();
 	let fullscreen = $state(false);
-	let goalsMessage = $state('');
 	// Erst im Browser (DOMParser) – sonst passt das Server-HTML nicht zum Client.
 	let mounted = $state(false);
 
@@ -87,39 +97,6 @@
 			})
 			.filter(Boolean);
 	});
-
-	// Fenster „Als Stundenziele übernehmen?“: Schritte an-/abwählen, optional bisherige ersetzen.
-	let goalsOpen = $state(false);
-	/** @type {boolean[]} */
-	let picked = $state([]);
-	let replaceGoals = $state(false);
-	let goalsBusy = $state(false);
-	const pickedTexts = $derived(stepTexts.filter((_, i) => picked[i]));
-
-	function openGoals() {
-		picked = stepTexts.map(() => true);
-		replaceGoals = false;
-		goalsOpen = true;
-	}
-
-	async function createGoals() {
-		goalsBusy = true;
-		try {
-			const { added, students } = await api('/api/goals', 'POST', {
-				kind: 'lesson',
-				texts: pickedTexts,
-				replace: replaceGoals
-			});
-			goalsMessage = added ? `✓ ${added} Ziele für ${students} Schüler` : '✓ Schon übernommen';
-			goalsOpen = false;
-			await invalidateAll();
-		} catch (err) {
-			goalsMessage = err instanceof Error ? err.message : String(err);
-		} finally {
-			goalsBusy = false;
-		}
-		setTimeout(() => (goalsMessage = ''), 4000);
-	}
 
 	// Letzte Auswahl im Editor merken – Farbwähler und Link-Dialog nehmen sonst den Fokus mit.
 	/** @type {Range | null} */
@@ -339,6 +316,39 @@
 		}
 		apply();
 	}
+
+	/**
+	 * An jedem Schritt: wie viele Schüler ihn als Ziel erledigt haben (z. B. „7/11“).
+	 * Läuft nach `steps` und aktualisiert sich mit jedem Neuladen der Daten.
+	 * @param {HTMLElement} node
+	 * @param {Record<string, { done: number, total: number }>} stats
+	 */
+	function stepProgress(node, stats) {
+		/** @param {Record<string, { done: number, total: number }>} current */
+		function apply(current) {
+			for (const li of node.querySelectorAll(':scope > ol > li')) {
+				const clone = /** @type {HTMLElement} */ (li.cloneNode(true));
+				clone.querySelectorAll('.sub, .step-count').forEach((el) => el.remove());
+				const key = (clone.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+				const entry = current[key];
+				let badge = li.querySelector(':scope > .step-count');
+				if (!entry || entry.total === 0) {
+					badge?.remove();
+					continue;
+				}
+				if (!badge) {
+					badge = document.createElement('span');
+					badge.className = 'step-count';
+					li.append(badge);
+				}
+				badge.classList.toggle('all', entry.done === entry.total);
+				badge.textContent = `✓ ${entry.done}/${entry.total}`;
+				badge.setAttribute('title', `${entry.done} von ${entry.total} Schülern erledigt`);
+			}
+		}
+		apply(stats);
+		return { update: apply };
+	}
 </script>
 
 <svelte:document onselectionchange={onSelectionChange} />
@@ -346,7 +356,6 @@
 	onkeydown={(e) => {
 		if (e.key !== 'Escape') return;
 		zoomed = null;
-		goalsOpen = false;
 	}}
 />
 
@@ -363,47 +372,10 @@
 			<span class="label">{editing ? 'Auftrag bearbeiten' : 'Auftrag'}</span>
 			{#if !editing}
 				<div class="tools">
-					{#if goalsMessage}<span class="tool-message">{goalsMessage}</span>{/if}
 					{#if canEdit && stepTexts.length > 0}
-						<div class="goals-anchor">
-							<button
-								class="tool accent"
-								onclick={() => (goalsOpen ? (goalsOpen = false) : openGoals())}
-								aria-expanded={goalsOpen}
-								title="Die Schritte allen Schülern als Stundenziele geben"
-							>
-								☑ Als Stundenziele
-							</button>
-							{#if goalsOpen}
-								<button class="pop-backdrop" tabindex="-1" aria-label="Schließen" onclick={() => (goalsOpen = false)}></button>
-								<div class="goals-pop" role="dialog" aria-labelledby="goals-pop-title">
-									<h3 id="goals-pop-title">Als Stundenziele übernehmen?</h3>
-									<p class="pop-sub">
-										Diese Punkte werden für {studentCount === 1 ? 'den Schüler' : `alle ${studentCount} Schüler`} als Ziele angelegt.
-									</p>
-									<ul>
-										{#each stepTexts as text, i (i)}
-											<li>
-												<label>
-													<input type="checkbox" bind:checked={picked[i]} />
-													<span>{text}</span>
-												</label>
-											</li>
-										{/each}
-									</ul>
-									<label class="replace">
-										<input type="checkbox" bind:checked={replaceGoals} />
-										Bisherige Stundenziele ersetzen
-									</label>
-									<div class="pop-actions">
-										<button onclick={() => (goalsOpen = false)} disabled={goalsBusy}>Abbrechen</button>
-										<button class="primary" onclick={createGoals} disabled={goalsBusy || pickedTexts.length === 0 || studentCount === 0}>
-											{pickedTexts.length === 1 ? '1 Ziel anlegen' : `${pickedTexts.length} Ziele anlegen`}
-										</button>
-									</div>
-								</div>
-							{/if}
-						</div>
+						<button class="tool accent" onclick={() => (goalsOpen = true)} title="Die Schritte als Ziele an die Schüler senden">
+							☑ Als Stundenziele
+						</button>
 					{/if}
 					{#if !isEmpty}
 						<button class="tool" onclick={() => changeScale(-0.1)} disabled={scale <= SCALE_MIN} title="Schrift kleiner">A−</button>
@@ -512,7 +484,7 @@
 			{#if assignment.title}<h2>{assignment.title}</h2>{/if}
 			<!-- Bei neuem Text komplett neu aufbauen – steps verschiebt Knoten, die @html sonst nicht mehr findet. -->
 			{#key assignment.html}
-				<div class="content" use:steps>{@html assignment.html}</div>
+				<div class="content" use:steps use:stepProgress={progress}>{@html assignment.html}</div>
 			{/key}
 		{/if}
 	</div>
@@ -545,6 +517,10 @@
 		</aside>
 	{/if}
 </section>
+
+{#if canEdit}
+	<GoalsFromAssignment bind:open={goalsOpen} steps={stepTexts} {students} />
+{/if}
 
 {#if zoomed}
 	<div class="lightbox" role="dialog" aria-modal="true" aria-label="Bild">
@@ -647,101 +623,6 @@
 		border-color: var(--lesson-accent);
 		background: color-mix(in srgb, var(--lesson-accent) 12%, transparent);
 		color: var(--lesson-accent);
-	}
-
-	/* Fenster „Als Stundenziele übernehmen?“ unter dem Knopf. */
-	.goals-anchor {
-		position: relative;
-	}
-
-	.pop-backdrop {
-		position: fixed;
-		inset: 0;
-		z-index: 14;
-		padding: 0;
-		border: 0;
-		border-radius: 0;
-		background: transparent;
-		cursor: default;
-	}
-
-	.goals-pop {
-		position: absolute;
-		top: calc(100% + 8px);
-		right: 0;
-		z-index: 15;
-		width: min(400px, calc(100vw - 32px));
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-		padding: 16px 18px;
-		border: 1px solid var(--border);
-		border-radius: 12px;
-		background: var(--surface);
-		box-shadow: 0 12px 40px rgb(10 15 30 / 28%);
-		text-align: left;
-	}
-
-	.goals-pop h3 {
-		margin: 0;
-		font-size: 17px;
-	}
-
-	.pop-sub {
-		margin: -6px 0 2px;
-		color: var(--muted);
-		font-size: 13px;
-	}
-
-	.goals-pop ul {
-		margin: 0;
-		padding: 0;
-		list-style: none;
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-
-	.goals-pop label {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 5px 0;
-		font-size: 15px;
-		cursor: pointer;
-	}
-
-	.goals-pop input[type='checkbox'] {
-		flex-shrink: 0;
-		width: 17px;
-		height: 17px;
-		margin: 0;
-		accent-color: var(--accent);
-	}
-
-	.goals-pop .replace {
-		padding-top: 10px;
-		border-top: 1px solid var(--border);
-		color: var(--muted);
-		font-size: 13px;
-	}
-
-	.pop-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 8px;
-		margin-top: 4px;
-	}
-
-	.pop-actions button {
-		padding: 8px 16px;
-		font-weight: 600;
-	}
-
-	.tool-message {
-		color: var(--ok);
-		font-size: 13px;
-		font-weight: 600;
 	}
 
 	.main {
@@ -875,6 +756,30 @@
 		color: var(--accent);
 		font-size: calc(18px * var(--scale, 1));
 		font-weight: 700;
+	}
+
+	/* Fortschritt je Schritt rechts („✓ 7/11“), grün wenn alle fertig sind. */
+	.content :global(ol > li:has(> .step-count)) {
+		padding-right: 84px;
+	}
+
+	.content :global(ol > li > .step-count) {
+		position: absolute;
+		top: calc(12px + 2px * var(--scale, 1));
+		right: 0;
+		padding: 3px 10px;
+		border-radius: 999px;
+		background: var(--track);
+		color: var(--muted);
+		font-size: 14px;
+		font-weight: 700;
+		line-height: 1.4;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.content :global(ol > li > .step-count.all) {
+		background: var(--ok-soft);
+		color: var(--ok);
 	}
 
 	.content :global(ol > li .sub) {

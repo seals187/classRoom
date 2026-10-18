@@ -28,6 +28,25 @@
 		return `color-mix(in srgb, var(--ok) ${Math.round(25 + p * 55)}%, var(--track))`;
 	};
 
+	/**
+	 * Wie viele Schüler ein Ziel (nach Text) haben und erledigt haben – Stundenziele vor Selbstlern-Zielen.
+	 * @param {import('#lib/server/db.js').Student[]} list
+	 */
+	function countByText(list) {
+		/** @type {Record<string, { done: number, total: number }>} */
+		const map = {};
+		for (const s of list) {
+			for (const g of s.goals) {
+				const entry = (map[g.text] ??= { done: 0, total: 0 });
+				entry.total++;
+				if (g.done) entry.done++;
+			}
+		}
+		return map;
+	}
+
+	const progress = $derived({ ...countByText(data.selfStudents ?? []), ...countByText(students) });
+
 	onMount(() => autoRefresh(10000));
 </script>
 
@@ -36,7 +55,7 @@
 </svelte:head>
 
 <div class="home">
-	<AssignmentBox assignment={data.assignment} canEdit={data.user?.role === 'teacher'} studentCount={students.length} />
+	<AssignmentBox assignment={data.assignment} canEdit={data.user?.role === 'teacher'} {students} {progress} />
 
 	{#if !ui.focus}
 		<!-- Stundenziele auf einen Blick: ein Quadrat pro Schüler -->

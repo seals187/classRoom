@@ -2,7 +2,8 @@
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api.js';
-	import { formatClock } from '#lib/time.js';
+	import { formatClock, lessonSpan } from '#lib/time.js';
+	import { clock } from '#lib/clock.svelte.js';
 	import Icon from './Icon.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 	import { NAV } from '#lib/nav.js';
@@ -13,7 +14,7 @@
 	/**
 	 * @type {{
 	 *   open: boolean,
-	 *   settings: { roomName: string, startTime: string, returnTime: string },
+	 *   settings: { roomName: string, roomChange: boolean, startTime: string, returnTime: string },
 	 *   user: import('#lib/server/auth.js').User,
 	 *   noiseSettings: import('#lib/server/db.js').NoiseSettings | null
 	 * }}
@@ -24,7 +25,7 @@
 	// Schüler sehen nur ihre Seiten, Darstellung und Abmelden.
 	const links = $derived(isTeacher ? NAV : NAV.filter((item) => !item.teacherOnly));
 
-	let form = $state({ roomName: '', startTime: '', returnTime: '' });
+	let form = $state({ roomName: '', roomChange: true, startTime: '', returnTime: '' });
 	let saving = $state(false);
 	let message = $state('');
 
@@ -34,7 +35,7 @@
 	// Beim Öffnen (und nach dem Speichern) die aktuellen Werte übernehmen.
 	$effect(() => {
 		if (!open) return;
-		form = { ...settings };
+		form = { ...settings, startTime: settings.startTime.slice(0, 5), returnTime: settings.returnTime.slice(0, 5) };
 		if (noiseSettings) noiseForm = { ...noiseSettings };
 	});
 
@@ -78,15 +79,53 @@
 		}
 	}
 
+	// Läuft gerade eine Stunde (gespeicherte Zeiten, Beginn vorbei, Ende höchstens 30 min her)?
+	const EXTEND = [5, 10, 15];
+	const running = $derived.by(() => {
+		const now = clock.now;
+		if (!now || !settings.startTime || !settings.returnTime) return false;
+		const { start, end } = lessonSpan(settings.startTime, settings.returnTime, now);
+		return !!start && !!end && start <= now && now.getTime() < end.getTime() + 30 * 60000;
+	});
+
 	/** @param {SubmitEvent} e */
 	function save(e) {
 		e.preventDefault();
-		run(() => api('/api/settings', 'PUT', form));
+		if (!form.startTime) form.startTime = hhmm(new Date());
+		run(() => api('/api/settings', 'PUT', form), running ? 'Stunde aktualisiert' : 'Stunde gestartet');
 	}
 
+	/**
+	 * Laufende Stunde verlängern – sofort gespeichert. Ist die Zeit schon um, zählt es ab jetzt.
+	 * @param {number} minutes
+	 */
+	function extend(minutes) {
+		const now = /** @type {Date} */ (clock.now ?? new Date());
+		const { end } = lessonSpan(settings.startTime, settings.returnTime, now);
+		const base = end && end > now ? end : now;
+		form.returnTime = hhmm(new Date(base.getTime() + minutes * 60000));
+		run(
+			() => api('/api/settings', 'PUT', { ...settings, returnTime: form.returnTime }),
+			`Um ${minutes} min verlängert – Ende ${form.returnTime}`
+		);
+	}
+
+	const durations = $derived(/** @type {number[]} */ (page.data.lessonDurations ?? [45, 90]));
+
+	/** @param {Date} d */
+	const hhmm = (d) => formatClock(d).slice(0, 5);
+
 	function startNow() {
-		form.startTime = formatClock(new Date());
-		run(() => api('/api/settings', 'PUT', form), 'Stunde gestartet');
+		form.startTime = hhmm(new Date());
+	}
+
+	/** Ende = Beginn (oder jetzt) + Minuten. @param {number} minutes */
+	function addMinutes(minutes) {
+		if (!form.startTime) form.startTime = hhmm(new Date());
+		const [h, m] = form.startTime.split(':').map(Number);
+		const end = new Date();
+		end.setHours(h, m + minutes, 0, 0);
+		form.returnTime = hhmm(end);
 	}
 
 	function clearTimes() {
@@ -125,29 +164,51 @@
 		{#if isTeacher}
 		<form onsubmit={save}>
 			<h3>Unterrichtsstunde</h3>
-			<label class="field">
-				Klassenraum
-				<input type="text" bind:value={form.roomName} maxlength="60" required />
-			</label>
-			<label class="field">
-				Beginn
-				<span class="row">
-					<input type="time" step="1" bind:value={form.startTime} />
-					<button type="button" onclick={startNow} disabled={saving} title="Beginn auf die aktuelle Uhrzeit setzen">
-						Jetzt
-					</button>
-				</span>
-			</label>
-			<label class="field" title="Zurück ins Hauptschulzimmer um">
-				Zurück um
-				<input type="time" bind:value={form.returnTime} />
-			</label>
-			<div class="actions">
-				<button type="submit" class="primary" disabled={saving}>Speichern</button>
-				<button type="button" onclick={clearTimes} disabled={saving} title="Beginn und Rückkehrzeit leeren">
-					Zeiten zurücksetzen
-				</button>
+			<div class="times">
+				<label>
+					Beginn
+					<input type="time" bind:value={form.startTime} />
+				</label>
+				<label>
+					Ende
+					<input type="time" bind:value={form.returnTime} />
+				</label>
 			</div>
+			<div class="quick">
+				<button type="button" onclick={startNow} title="Beginn auf die aktuelle Uhrzeit setzen">Jetzt</button>
+				{#each durations as minutes (minutes)}
+					<button type="button" onclick={() => addMinutes(minutes)} title="Ende = Beginn + {minutes} min">+{minutes} min</button>
+				{/each}
+			</div>
+			{#if running}
+				<!-- Laufende Stunde verlängern: wirkt sofort -->
+				<div class="extend">
+					<span>Verlängern</span>
+					{#each EXTEND as minutes (minutes)}
+						<button type="button" onclick={() => extend(minutes)} disabled={saving} title="Ende um {minutes} min nach hinten schieben">
+							+{minutes}
+						</button>
+					{/each}
+					<span>min</span>
+				</div>
+			{/if}
+
+			<!-- Raumwechsel: Felder erscheinen nur bei Bedarf -->
+			<label class="switch">
+				<span><Icon name="door" size={16} /> Danach Raumwechsel</span>
+				<input type="checkbox" role="switch" bind:checked={form.roomChange} />
+			</label>
+			{#if form.roomChange}
+				<label>
+					Zurück in Raum
+					<input type="text" bind:value={form.roomName} maxlength="60" placeholder="z. B. Raum 101" required />
+				</label>
+			{/if}
+
+			<button type="submit" class="primary start-btn" disabled={saving}>{running ? 'Stunde aktualisieren' : 'Stunde starten'}</button>
+			<button type="button" class="text-link" onclick={clearTimes} disabled={saving} title="Beginn und Ende leeren">
+				Zeiten zurücksetzen
+			</button>
 			{#if message}<p class="message">{message}</p>{/if}
 		</form>
 		{/if}
@@ -354,6 +415,127 @@
 
 	.row input {
 		flex: 1;
+	}
+
+	/* --- Unterrichtsstunde: Beginn/Ende nebeneinander, Schnellknöpfe, Raumwechsel --- */
+	.times {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 8px;
+	}
+
+	.quick {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+
+	.drawer .quick button {
+		padding: 4px 10px;
+		font-size: 0.82rem;
+		color: var(--muted);
+	}
+
+	/* Laufende Stunde verlängern */
+	.extend {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 6px 8px;
+		border-radius: 8px;
+		background: var(--accent-soft);
+		color: var(--accent);
+		font-size: 0.82rem;
+		font-weight: 600;
+	}
+
+	.extend span:first-child {
+		margin-right: auto;
+	}
+
+	.drawer .extend button {
+		padding: 3px 10px;
+		border-color: var(--accent);
+		background: var(--surface);
+		color: var(--accent);
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
+
+	.switch {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		margin-top: 4px;
+		padding-top: 10px;
+		border-top: 1px solid var(--border);
+		color: var(--text);
+		font-size: 0.9rem;
+		cursor: pointer;
+	}
+
+	.switch span {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	/* Kippschalter statt Häkchen */
+	.switch input {
+		appearance: none;
+		position: relative;
+		width: 38px;
+		height: 22px;
+		margin: 0;
+		border-radius: 999px;
+		background: var(--track);
+		box-shadow: inset 0 0 0 1px var(--border);
+		cursor: pointer;
+		transition: background 0.2s;
+	}
+
+	.switch input::after {
+		content: '';
+		position: absolute;
+		top: 3px;
+		left: 3px;
+		width: 16px;
+		height: 16px;
+		border-radius: 50%;
+		background: #fff;
+		box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
+		transition: transform 0.2s;
+	}
+
+	.switch input:checked {
+		background: var(--accent);
+		box-shadow: none;
+	}
+
+	.switch input:checked::after {
+		transform: translateX(16px);
+	}
+
+	.switch input:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
+
+	.drawer .start-btn {
+		margin-top: 4px;
+		padding: 8px 10px;
+		font-weight: 700;
+	}
+
+	.drawer .text-link {
+		align-self: center;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: var(--muted);
+		font-size: 0.78rem;
+		text-decoration: underline;
+		text-underline-offset: 2px;
 	}
 
 	.actions button {

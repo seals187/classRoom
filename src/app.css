@@ -10,6 +10,8 @@
 	--ok-soft: #d9f2e4;
 	--warn: #d98a0b;
 	--warn-soft: #fbedd2;
+	/* Zeitbalken „Jetzt zurück“ (Losgehen): kräftiges Orange */
+	--go: #ea6a0c;
 	--danger: #cf3f3f;
 	--danger-soft: #f9dddd;
 	--radius: 14px;
@@ -48,6 +50,7 @@
 	--ok-soft: #163626;
 	--warn: #f0a63a;
 	--warn-soft: #3b2e14;
+	--go: #ff7a1a;
 	--danger: #f06a6a;
 	--danger-soft: #45201f;
 	--on-accent: #0c1220;
@@ -79,6 +82,7 @@
 		--ok-soft: #163626;
 		--warn: #f0a63a;
 		--warn-soft: #3b2e14;
+		--go: #ff7a1a;
 		--danger: #f06a6a;
 		--danger-soft: #45201f;
 		--on-accent: #0c1220;

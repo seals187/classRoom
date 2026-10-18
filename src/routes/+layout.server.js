@@ -9,6 +9,7 @@ export function load({ locals }) {
 		user: locals.user,
 		settings: getSettings(),
 		warnMinutes: config.warnMinutes,
+		goMinutes: config.goMinutes,
 		lessonDurations: config.lessonDurations,
 		background: getBackground(locals.user),
 		goalsCollapsed: config.goalsCollapsed,
