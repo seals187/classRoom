@@ -5,6 +5,7 @@
 	import { api } from '#lib/api.js';
 	import { ask, askText, showError } from '#lib/dialog.svelte.js';
 	import { shrinkImage } from '#lib/shrink-image.js';
+	import { dashesToSteps } from '#lib/steps.js';
 	import Icon from './Icon.svelte';
 	import GoalsFromAssignment from './GoalsFromAssignment.svelte';
 
@@ -46,11 +47,14 @@
 	/** @type {string | null} */
 	let zoomed = $state(null);
 
-	// Schriftgröße (A− / A+) pro Gerät, z. B. größer am Beamer.
+	// Schriftgröße (A− / A+) und Bildgröße pro Gerät, z. B. größer am Beamer.
 	const SCALE_KEY = 'assignmentScale';
-	const SCALE_MIN = 0.8;
-	const SCALE_MAX = 1.6;
+	const SCALES = [0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6, 1.8, 2, 2.25, 2.5];
 	let scale = $state(1);
+	const IMAGE_SIZE_KEY = 'assignmentImageWidth';
+	// Breite der Bildspalte in % der Karte: 15 % bis 50 % in feinen Schritten
+	const IMAGE_SIZES = Array.from({ length: 15 }, (_, i) => 15 + i * 2.5);
+	let imageSize = $state(30);
 	/** @type {HTMLElement | undefined} */
 	let sectionEl = $state();
 	let fullscreen = $state(false);
@@ -61,7 +65,9 @@
 		mounted = true;
 		try {
 			const stored = Number(localStorage.getItem(SCALE_KEY));
-			if (stored >= SCALE_MIN && stored <= SCALE_MAX) scale = stored;
+			if (stored >= SCALES[0] && stored <= SCALES[SCALES.length - 1]) scale = stored;
+			const storedImage = Number(localStorage.getItem(IMAGE_SIZE_KEY));
+			if (IMAGE_SIZES.includes(storedImage)) imageSize = storedImage;
 		} catch {
 			// Kein localStorage – Standardgröße.
 		}
@@ -70,14 +76,38 @@
 		return () => document.removeEventListener('fullscreenchange', onChange);
 	});
 
-	/** @param {number} delta */
-	function changeScale(delta) {
-		scale = Math.round(Math.min(SCALE_MAX, Math.max(SCALE_MIN, scale + delta)) * 10) / 10;
+	/**
+	 * Eine Stufe größer (+1) oder kleiner (−1); Zwischenwerte (alte Einstellung) springen zur nächsten Stufe.
+	 * @param {number[]} levels
+	 * @param {number} current
+	 * @param {number} dir
+	 */
+	function nextLevel(levels, current, dir) {
+		const i = levels.findIndex((v) => v >= current);
+		const at = i === -1 ? levels.length - 1 : i;
+		const target = levels[at] > current && dir > 0 ? at : at + dir;
+		return levels[Math.min(levels.length - 1, Math.max(0, target))];
+	}
+
+	/** @param {string} key @param {number} value */
+	function remember(key, value) {
 		try {
-			localStorage.setItem(SCALE_KEY, String(scale));
+			localStorage.setItem(key, String(value));
 		} catch {
 			// Gilt dann nur bis zum Neuladen.
 		}
+	}
+
+	/** @param {number} dir */
+	function changeScale(dir) {
+		scale = nextLevel(SCALES, scale, dir);
+		remember(SCALE_KEY, scale);
+	}
+
+	/** @param {number} dir */
+	function changeImageSize(dir) {
+		imageSize = nextLevel(IMAGE_SIZES, imageSize, dir);
+		remember(IMAGE_SIZE_KEY, imageSize);
 	}
 
 	function toggleFullscreen() {
@@ -89,6 +119,7 @@
 	const stepTexts = $derived.by(() => {
 		if (!mounted || !assignment.html) return [];
 		const doc = new DOMParser().parseFromString(assignment.html, 'text/html');
+		dashesToSteps(doc.body);
 		return [...doc.querySelectorAll('body > ol > li')]
 			.map((li) => {
 				const br = [...li.childNodes].find((n) => n.nodeName === 'BR');
@@ -260,21 +291,53 @@
 		if (text) document.execCommand('insertText', false, text);
 	}
 
+	// Beim Bearbeiten ist die ganze Karte Ablagefläche für Bilder (nicht nur das Textfeld).
+	let dragOver = $state(false);
+	let dragDepth = 0;
+
+	/** Werden Dateien gezogen? (Text innerhalb des Editors verschieben bleibt normal.) @param {DragEvent} e */
+	const hasFiles = (e) => [...(e.dataTransfer?.types ?? [])].includes('Files');
+
+	/** @param {DragEvent} e */
+	function onDragEnter(e) {
+		if (!editing || !hasFiles(e)) return;
+		dragDepth++;
+		dragOver = true;
+	}
+
+	/** @param {DragEvent} e */
+	function onDragLeave(e) {
+		if (!editing || !hasFiles(e)) return;
+		dragDepth = Math.max(0, dragDepth - 1);
+		if (dragDepth === 0) dragOver = false;
+	}
+
+	/** @param {DragEvent} e */
+	function onDragOver(e) {
+		if (!editing || !hasFiles(e)) return;
+		e.preventDefault();
+		if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+	}
+
 	/** @param {DragEvent} e */
 	function onDrop(e) {
-		const files = [...(e.dataTransfer?.files ?? [])];
-		if (!files.length) return;
+		dragDepth = 0;
+		dragOver = false;
+		if (!editing || !hasFiles(e)) return;
+		// Auch bei Nicht-Bildern: sonst öffnet der Browser die Datei und die Änderungen sind weg.
 		e.preventDefault();
-		upload(files);
+		upload([...(e.dataTransfer?.files ?? [])]);
 	}
 
 	/**
-	 * Schritte der nummerierten Liste: Text nach dem ersten Zeilenumbruch (Umschalt+Enter)
-	 * als graue Zusatzzeile anzeigen. Nur fürs Anzeigen – gespeichert bleibt das HTML unverändert.
+	 * Schritte der nummerierten Liste (auch von Hand mit „- “ getippt): Text nach dem ersten
+	 * Zeilenumbruch (Umschalt+Enter) als graue Zusatzzeile anzeigen. Nur fürs Anzeigen –
+	 * gespeichert bleibt das HTML unverändert.
 	 * @param {HTMLElement} node
 	 */
 	function steps(node) {
 		function apply() {
+			dashesToSteps(node);
 			// Links: nur die Adresse ohne https:// und www. zeigen, wenn der Text die Adresse selbst ist.
 			for (const a of node.querySelectorAll('a')) {
 				const href = a.getAttribute('href') ?? '';
@@ -363,44 +426,73 @@
 	class="assignment"
 	class:editing
 	class:fullscreen
+	class:drag-over={dragOver}
 	class:with-images={editing || shownImages.length > 0}
+	ondragenter={onDragEnter}
+	ondragleave={onDragLeave}
+	ondragover={onDragOver}
+	ondrop={onDrop}
 	style:--scale={editing ? 1 : scale}
+	style:--image-col={editing ? null : `${imageSize}%`}
 	bind:this={sectionEl}
 >
-	<div class="main">
-		<header>
-			<span class="label">{editing ? 'Auftrag bearbeiten' : 'Auftrag'}</span>
-			{#if !editing}
-				<div class="tools">
-					{#if canEdit && stepTexts.length > 0}
-						<button class="tool accent" onclick={() => (goalsOpen = true)} title="Die Schritte als Ziele an die Schüler senden">
-							☑ Als Stundenziele
-						</button>
-					{/if}
-					{#if !isEmpty}
-						<button class="tool" onclick={() => changeScale(-0.1)} disabled={scale <= SCALE_MIN} title="Schrift kleiner">A−</button>
-						<button class="tool" onclick={() => changeScale(0.1)} disabled={scale >= SCALE_MAX} title="Schrift größer">A+</button>
-					{/if}
-					{#if canEdit}
-						<button class="tool" onclick={startEdit} title="Bearbeiten" aria-label="Bearbeiten"><Icon name="pencil" size={13} /></button>
-					{/if}
-					{#if !isEmpty}
-						<button class="tool" onclick={toggleFullscreen} title={fullscreen ? 'Vollbild beenden' : 'Vollbild'} aria-label="Vollbild">
-							<Icon name={fullscreen ? 'close' : 'expand'} size={13} />
-						</button>
-					{/if}
-				</div>
-			{:else}
-				<!-- Oben statt unter dem Editor – so muss man zum Speichern nicht scrollen. -->
-				<div class="head-actions">
-					{#if !isEmpty}<button class="text-btn danger" onclick={remove} disabled={saving}>Auftrag löschen</button>{/if}
-					<button onclick={() => (editing = false)} disabled={saving}>Abbrechen</button>
-					<button class="primary" onclick={save} disabled={saving || uploading > 0}>
-						{uploading > 0 ? 'Bild lädt…' : 'Speichern'}
+	<!-- Über die ganze Breite: Knöpfe bleiben fix, auch wenn die Bilder größer werden. -->
+	<header>
+		<span class="label">{editing ? 'Auftrag bearbeiten' : 'Auftrag'}</span>
+		{#if !editing}
+			<div class="tools">
+				{#if canEdit && stepTexts.length > 0}
+					<button class="tool accent" onclick={() => (goalsOpen = true)} title="Die Schritte als Ziele an die Schüler senden">
+						☑ Als Stundenziele
 					</button>
-				</div>
-			{/if}
-		</header>
+				{/if}
+				{#if !isEmpty}
+					<button class="tool" onclick={() => changeScale(-1)} disabled={scale <= SCALES[0]} title="Schrift kleiner">A−</button>
+					<button class="tool" onclick={() => changeScale(1)} disabled={scale >= SCALES[SCALES.length - 1]} title="Schrift größer">
+						A+
+					</button>
+				{/if}
+				{#if shownImages.length > 0}
+					<button
+						class="tool img-size"
+						onclick={() => changeImageSize(-1)}
+						disabled={imageSize <= IMAGE_SIZES[0]}
+						title="Bilder kleiner"
+						aria-label="Bilder kleiner"
+					>
+						<Icon name="image" size={13} />−
+					</button>
+					<button
+						class="tool img-size"
+						onclick={() => changeImageSize(1)}
+						disabled={imageSize >= IMAGE_SIZES[IMAGE_SIZES.length - 1]}
+						title="Bilder größer"
+						aria-label="Bilder größer"
+					>
+						<Icon name="image" size={13} />+
+					</button>
+				{/if}
+				{#if canEdit}
+					<button class="tool" onclick={startEdit} title="Bearbeiten" aria-label="Bearbeiten"><Icon name="pencil" size={13} /></button>
+				{/if}
+				{#if !isEmpty}
+					<button class="tool" onclick={toggleFullscreen} title={fullscreen ? 'Vollbild beenden' : 'Vollbild'} aria-label="Vollbild">
+						<Icon name={fullscreen ? 'close' : 'expand'} size={13} />
+					</button>
+				{/if}
+			</div>
+		{:else}
+			<!-- Oben statt unter dem Editor – so muss man zum Speichern nicht scrollen. -->
+			<div class="head-actions">
+				{#if !isEmpty}<button class="text-btn danger" onclick={remove} disabled={saving}>Auftrag löschen</button>{/if}
+				<button onclick={() => (editing = false)} disabled={saving}>Abbrechen</button>
+				<button class="primary" onclick={save} disabled={saving || uploading > 0}>
+					{uploading > 0 ? 'Bild lädt…' : 'Speichern'}
+				</button>
+			</div>
+		{/if}
+	</header>
+	<div class="main">
 		{#if editing && error}<p class="error">{error}</p>{/if}
 
 		{#if editing}
@@ -473,8 +565,6 @@
 				data-placeholder="Was sollen die Schüler tun?"
 				bind:this={editorEl}
 				onpaste={onPaste}
-				ondrop={onDrop}
-				ondragover={(e) => e.preventDefault()}
 			></div>
 		{:else if isEmpty}
 			<p class="empty">
@@ -491,7 +581,7 @@
 
 	{#if editing || shownImages.length > 0}
 		<!-- Bilder rechts als Vorschau, groß per Klick -->
-		<aside class="media" class:multi={shownImages.length > 2}>
+		<aside class="media" class:pair={shownImages.length === 2} class:multi={shownImages.length > 2}>
 			{#each shownImages as id, i (id)}
 				<div class="thumb">
 					<button type="button" class="zoom-btn" aria-label="Bild {i + 1} vergrößern" onclick={() => (zoomed = fileUrl(id))}>
@@ -536,8 +626,9 @@
 		flex: 1;
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: auto 1fr;
 		align-content: start;
-		gap: 32px;
+		gap: 10px 32px;
 		padding: 20px 28px;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
@@ -546,7 +637,8 @@
 	}
 
 	.assignment.with-images {
-		grid-template-columns: minmax(0, 1fr) 270px;
+		/* Bildspalte in % der Karte (Bilder − / +), höchstens die Hälfte. */
+		grid-template-columns: minmax(0, 1fr) var(--image-col, 270px);
 	}
 
 	/* Vollbild (⛶): Karte füllt den Bildschirm, Text etwas größer. */
@@ -562,6 +654,11 @@
 	   sehen gleich aus. Bis zwei Bilder untereinander, ab drei ein 2er-Raster. Ganz: Großansicht. */
 	.assignment:not(.editing) .media .zoom-btn img {
 		aspect-ratio: 4 / 3;
+	}
+
+	/* Zwei Bilder untereinander etwas flacher, damit die Startseite ohne Scrollen passt. */
+	.assignment:not(.editing) .media.pair .zoom-btn img {
+		aspect-ratio: 3 / 2;
 	}
 
 	.assignment:not(.editing) .media.multi {
@@ -619,6 +716,11 @@
 		border-color: var(--muted);
 	}
 
+	.tool.img-size {
+		display: inline-flex;
+		gap: 2px;
+	}
+
 	.tool.accent {
 		border-color: var(--lesson-accent);
 		background: color-mix(in srgb, var(--lesson-accent) 12%, transparent);
@@ -633,6 +735,7 @@
 	}
 
 	header {
+		grid-column: 1 / -1;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -689,6 +792,8 @@
 		font-size: calc(20px * var(--scale, 1));
 		line-height: 1.5;
 		overflow-wrap: anywhere;
+		/* Lange Wörter bei großer Schrift an Silbengrenzen trennen (lang="de"). */
+		hyphens: auto;
 	}
 
 	/* Anzeige: Spalte bis zum Kartenende, damit die Links unten stehen können. */
@@ -920,8 +1025,22 @@
 
 	/* --- Kompakter Bearbeitungsmodus (alles ohne Scrollen sichtbar) --- */
 	.assignment.editing {
-		gap: 20px;
+		gap: 10px 20px;
 		padding: 16px 20px 18px;
+	}
+
+	/* Bild wird über die Karte gezogen: Rahmen und „+ Bild“ hervorheben. */
+	.assignment.drag-over {
+		border-color: var(--accent);
+		box-shadow:
+			0 0 0 3px var(--accent-soft),
+			var(--shadow);
+	}
+
+	.assignment.drag-over .add-image {
+		border-color: var(--accent);
+		background: var(--accent-soft);
+		color: var(--accent);
 	}
 
 	.assignment.editing.with-images {
@@ -1069,6 +1188,15 @@
 		.assignment.with-images,
 		.assignment.editing.with-images {
 			grid-template-columns: minmax(0, 1fr);
+		}
+
+		/* Kopf, Bilder, Text untereinander – keine Zeile soll sich strecken. */
+		.assignment {
+			grid-template-rows: none;
+		}
+
+		header {
+			order: -2;
 		}
 
 		/* Bilder über dem Text als Reihe kleiner Vorschauen. */

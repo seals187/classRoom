@@ -102,6 +102,10 @@
 		<path d="M10 2h4" />
 		<path d="M12 14l3-3" />
 		<circle cx="12" cy="14" r="8" />
+	{:else if name === 'image'}
+		<rect x="3" y="3" width="18" height="18" rx="2" />
+		<circle cx="9" cy="9" r="2" />
+		<path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21" />
 	{:else if name === 'user-plus'}
 		<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
 		<circle cx="9" cy="7" r="4" />

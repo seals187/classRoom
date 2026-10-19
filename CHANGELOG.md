@@ -2,6 +2,20 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [0.3.2] – 2026-10-19
+
+### Neu
+- **Schritte auch von Hand getippt:** Zeilen, die mit „- “, „– “, „• “ oder „1. “ beginnen, erscheinen im Auftrag als nummerierte Schritte – mit Fortschritt („✓ 7/11“) und „Als Stundenziele“, wie beim Knopf „1. Schritte“
+- **Bildgröße im Auftrag:** Knöpfe „Bilder kleiner / größer“ neben A− / A+ in 15 feinen Stufen von 15 % bis 50 % der Kartenbreite (pro Gerät gespeichert)
+
+### Geändert
+- Schrift im Auftrag lässt sich weiter vergrößern (bis 250 %, vorher 160 %); lange Wörter werden an Silbengrenzen getrennt
+- Die Knöpfe oben im Auftrag (Als Stundenziele, A− / A+, Bilder, Bearbeiten, Vollbild) stehen fest oben rechts und verrutschen nicht mehr, wenn Bilder oder Schrift größer werden
+- Zwei Bilder im Auftrag werden etwas flacher angezeigt (3:2), damit die Startseite weiterhin ohne Scrollen passt
+
+### Behoben
+- Bilder ins Bearbeiten-Fenster ziehen funktioniert jetzt überall auf der Karte (auch auf „+ Bild“), nicht nur im Textfeld; die Karte wird dabei hervorgehoben
+
 ## [0.3.1] – 2026-10-19
 
 ### Neu
@@ -118,6 +132,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.3.2]: https://github.com/seals187/classRoom/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/seals187/classRoom/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/seals187/classRoom/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/seals187/classRoom/compare/v0.2.2...v0.2.3
