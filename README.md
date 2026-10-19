@@ -9,7 +9,7 @@
 
 **classRoom** ist ein Werkzeugkasten für Lehrerinnen und Lehrer: Auftrag, Zeit, Ziele und Lautstärke – groß und klar am Beamer, ohne Einarbeitung. Selbst gehostet mit Docker, alle Daten bleiben auf dem eigenen Server.
 
-[Funktionen](#funktionen) · [Installation](#installation) · [Konfiguration](#konfiguration) · [Update & Backup](#update--backup) · [Entwicklung](#entwicklung) · [Changelog](CHANGELOG.md)
+[Funktionen](#funktionen) · [Installation](#installation) · [Konfiguration](#konfiguration) · [Update, Daten & Backup](#update-daten--backup) · [Entwicklung](#entwicklung) · [Changelog](CHANGELOG.md)
 
 ## Funktionen
 
@@ -121,14 +121,66 @@ Alles steht in der `.env`; nach einer Änderung `docker compose up -d` ausführe
 
 </details>
 
-## Update & Backup
+## Update, Daten & Backup
+
+**Aktualisieren** (auf `latest` bzw. `CLASSROOM_VERSION`):
 
 ```bash
-docker compose pull && docker compose up -d                     # aktualisieren (latest bzw. CLASSROOM_VERSION)
-docker compose cp classroom:/app/data/classroom.db ./backup.db   # Datenbank sichern
+docker compose pull && docker compose up -d
 ```
 
-Die Datenbank liegt im Docker-Volume `classroom-data` und bleibt bei Updates erhalten; neue Spalten werden beim Start automatisch ergänzt. Was sich geändert hat, steht im [CHANGELOG](CHANGELOG.md).
+Daten bleiben dabei erhalten; neue Tabellen und Spalten werden beim Start automatisch ergänzt. Was sich geändert hat, steht im [CHANGELOG](CHANGELOG.md).
+
+### Wo liegen die Daten?
+
+Nicht im Ordner mit der `docker-compose.yml`, sondern im **Docker-Volume** `classroom-data`, das Docker selbst verwaltet:
+
+| Was | Wo |
+|---|---|
+| `docker-compose.yml`, `.env` | Im Installationsordner, z. B. `/opt/classroom` |
+| Schüler, Ziele, Gruppen, Auftrag, Räume, Einstellungen, Logins | Eine SQLite-Datei `classroom.db` im Volume |
+| Hochgeladene Bilder und Hintergründe | Ebenfalls in der Datenbank, nicht als einzelne Dateien |
+
+Docker setzt den Ordnernamen vor den Volume-Namen – bei `/opt/classroom` heißt es `classroom_classroom-data`. Unter Linux liegt es meist unter `/var/lib/docker/volumes/classroom_classroom-data/_data/`. Name und Pfad zeigen:
+
+```bash
+docker volume ls
+docker volume inspect classroom_classroom-data   # Pfad bei „Mountpoint“
+```
+
+> [!WARNING]
+> `docker compose down -v` und `docker volume rm …` löschen das Volume und damit **alle Daten**. Ein normales `docker compose down` oder ein Update ist unbedenklich. Für einen Umzug auf einen anderen Server reicht es nicht, den Installationsordner zu kopieren – das Volume muss mit (siehe Backup).
+
+### Backup & Wiederherstellen
+
+```bash
+# Nur die Datenbank sichern
+docker compose cp classroom:/app/data/classroom.db ./backup.db
+
+# Ganzes Volume als Archiv sichern (am besten bei gestopptem Container)
+docker compose stop
+docker run --rm -v classroom_classroom-data:/data -v "$PWD":/backup alpine tar czf /backup/classroom-backup.tgz -C /data .
+docker compose up -d
+
+# Archiv wiederherstellen – ersetzt alle aktuellen Daten!
+docker compose stop
+docker run --rm -v classroom_classroom-data:/data -v "$PWD":/backup alpine sh -c "rm -rf /data/* && tar xzf /backup/classroom-backup.tgz -C /data"
+docker compose up -d
+```
+
+<details>
+<summary><b>Daten lieber als normaler Ordner neben der <code>docker-compose.yml</code>?</b></summary>
+
+In der `docker-compose.yml` statt des Volumes einen Ordner einbinden:
+
+```yaml
+    volumes:
+      - ./data:/app/data
+```
+
+Bestehende Daten vorher einmal aus dem Volume nach `./data` kopieren – sonst startet classRoom leer.
+
+</details>
 
 ## Entwicklung
 
