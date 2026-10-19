@@ -55,7 +55,7 @@
 </svelte:head>
 
 <div class="home">
-	<AssignmentBox assignment={data.assignment} canEdit={data.user?.role === 'teacher'} {students} {progress} />
+	<AssignmentBox assignment={data.assignment} canEdit={data.user?.role === 'teacher'} {students} groups={data.groups} {progress} />
 
 	{#if !ui.focus}
 		<!-- Stundenziele auf einen Blick: ein Quadrat pro Schüler -->
@@ -85,8 +85,13 @@
 
 <style>
 	/* Auftrag füllt den Platz zwischen Kopfband und Stundenziel-Leiste. */
+	:global(main:has(> .home)) {
+		display: flex;
+		flex-direction: column;
+	}
+
 	.home {
-		min-height: calc(100dvh - 178px);
+		flex: 1;
 		display: flex;
 		flex-direction: column;
 		gap: 14px;

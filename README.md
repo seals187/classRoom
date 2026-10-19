@@ -1,7 +1,7 @@
 <p align="center"><img src="assets/banner-1.png" alt="classRoom – Der Werkzeugkasten für den Unterricht" width="100%"></p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.3.2-6c8cff" alt="Version 0.3.2"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.3.3-6c8cff" alt="Version 0.3.3"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/lizenz-AGPL--3.0-3dba79" alt="Lizenz AGPL-3.0"></a>
   <img src="https://img.shields.io/badge/docker-amd64%20%7C%20arm64-2496ed" alt="Docker amd64 und arm64">
   <img src="https://img.shields.io/badge/SvelteKit-Svelte%205-ff3e00" alt="SvelteKit mit Svelte 5">
@@ -15,9 +15,9 @@
 
 | | |
 |---|---|
-| 📋 **Auftrag** | Großer Titel, nummerierte Schritte, Bilder und Links; Editor mit Formatierung. Schrift per **A− / A+** (bis 250 %) und Bilder in feinen Stufen vergrößern, Vollbild. Schritte als **Stunden- oder Selbstlern-Ziele** an alle oder einzelne Schüler senden (mit Rückgängig) – danach zeigt jeder Schritt, wie viele ihn erledigt haben. |
-| ⏱️ **Kopfband** | Zeitbalken in vier Phasen (Arbeitsphase · Aufräumen · Jetzt zurück in Raum 101 · Sofort zurück in Raum 101!), rechts immer „Zurück in Raum 101 um 22:38“, mit Viertelstunden-Strichen, Digitaluhr und **„▶ Jetzt starten · 45 min“**. Raumwechsel lässt sich im Menü ausschalten. |
-| 🎯 **Stundenziele & Selbstlernen** | Eine Kachel pro Schüler, live aktualisiert, 20–30 Schüler ohne Scrollen. Wer seit 15 min nichts abgehakt hat, wird orange. Schüler können **„Nur meine Kachel“** einschalten. |
+| 📋 **Auftrag** | Großer Titel, nummerierte Schritte, Bilder und Links; Editor mit Formatierung. Schrift per **A− / A+** (bis 250 %) und Bilder in feinen Stufen vergrößern, Vollbild. Schritte als **Stunden- oder Selbstlern-Ziele** an alle, eine **Gruppe** oder einzelne Schüler senden (mit Rückgängig); Gruppen mit Name und Farbe bleiben gespeichert – danach zeigt jeder Schritt, wie viele ihn erledigt haben. |
+| ⏱️ **Kopfband** | Zeitbalken in vier Phasen (Arbeitsphase · Aufräumen · Jetzt zurück in Raum 101 · Sofort zurück in Raum 101!), rechts immer „Zurück in Raum 101 um 22:38“, mit Viertelstunden-Strichen, Digitaluhr. Ohne laufende Stunde zeigt der Balken **„▶ Stunde starten · 45 min · bis 18:18 · Zimmer 101“** und „Anpassen…“. Im Menü startet eine Karte die Stunde mit den Reitern **Zeit · Raum · Aufräumen**: Dauer (15/30/45/90 min) oder eigene Zeiten, Raum aus einer eigenen Liste (oder kein Raumwechsel), Aufräumen-Phase in Minuten. |
+| 🎯 **Stundenziele & Selbstlernen** | Eine Kachel pro Schüler, live aktualisiert, 20–30 Schüler ohne Scrollen. Jede Kachel zeigt das aktuelle Ziel und die Zeit seit dem letzten Abhaken – wer seit 15 min nichts abgehakt hat, wird gelb markiert. Schüler können **„Nur meine Kachel“** einschalten. |
 | 🚦 **Lautstärke-Ampel** | Misst über das Mikrofon des Lehrer-Geräts – nur im Browser, kein Ton wird gespeichert oder übertragen. Schüler sehen die Farbe. |
 | 📝 **Test-Modus** | Große Uhr, vergangene und verbleibende Zeit im Vollbild; läuft serverseitig weiter. |
 | 🎨 **Hintergründe** | 25 Verläufe, 26 Muster, 18 Fotos oder eigene Bilder – für alle festgelegt oder von jedem Schüler selbst gewählt. Hell- und Dunkelmodus. |
@@ -36,12 +36,12 @@
 
 **Stundenziele & Selbstlern-Modus**
 - Klick auf eine Kachel klappt die Checkliste auf; nur die Kacheln darunter rücken nach. Lehrkräfte können alle auf-/einklappen.
-- Selbstlernen zeigt das aktuelle Ziel und die Zeit seit dem letzten Abhaken.
+- Beide Modi zeigen das aktuelle Ziel und die Zeit seit dem letzten Abhaken; lange Ziele werden gekürzt, die Zeit bleibt sichtbar.
 - „Neue Stunde“ leert nur die Stundenziele; Selbstlern-Ziele bleiben.
 - Schüler bearbeiten nur ihre eigene Kachel.
 
 **Lautstärke-Ampel**
-- Im Menü unter *Ampel-Einstellungen*: Empfindlichkeit, Schwellen für Gelb und Rot, Live-Test.
+- Im Menü unter *Anzeige → Ampel*: Empfindlichkeit, Schwellen für Gelb und Rot, Live-Test.
 - Browser erlauben das Mikrofon nur über **HTTPS oder `localhost`**.
 
 **Zugänge**
@@ -90,14 +90,14 @@ Fertig – classRoom läuft unter **http://localhost:3000** (bzw. `http://<serve
 
 ## Konfiguration
 
-Alles steht in der `.env`; nach einer Änderung `docker compose up -d` ausführen. Raumname, Zeiten, Ampel und Hintergrund lassen sich zusätzlich im Menü ändern – diese Werte überschreiben die `.env`.
+Alles steht in der `.env`; nach einer Änderung `docker compose up -d` ausführen. Raum, Zeiten, Aufräumen-Minuten, Ampel und Hintergrund lassen sich zusätzlich im Menü ändern – diese Werte überschreiben die `.env`.
 
 | Variable | Wofür | Standard |
 |---|---|---|
 | `TEACHER_USERNAME` | Benutzername des ersten Lehrerkontos | `lehrer` |
 | `TEACHER_PASSWORD` | Passwort dazu – **muss gesetzt werden** (mind. 8 Zeichen) | – |
 | `PORT` | Port, unter dem classRoom erreichbar ist | `3000` |
-| `CLASSROOM_VERSION` | Image-Version, z. B. `0.3.2` | `latest` |
+| `CLASSROOM_VERSION` | Image-Version, z. B. `0.3.3` | `latest` |
 
 <details>
 <summary><b>Weitere Einstellungen</b></summary>
@@ -108,7 +108,7 @@ Alles steht in der `.env`; nach einer Änderung `docker compose up -d` ausführe
 | `DEFAULT_ROOM_CHANGE` | Nach der Stunde Raumwechsel: Balken zeigt „Zurück in Raum …“ statt nur „Ende“ | `true` |
 | `DEFAULT_ROOM_NAME` | Raum, in den es danach zurückgeht | `Klassenzimmer` |
 | `DEFAULT_START_TIME` / `DEFAULT_RETURN_TIME` | Beginn und Ende (`HH:MM`), leer = nicht gesetzt | – |
-| `LESSON_DURATIONS` | Minuten für die Knöpfe „Jetzt starten“, der erste ist der große | `45,90` |
+| `LESSON_DURATIONS` | Dauern in Minuten: die erste gilt für „Stunde starten“ im Kopfband, alle erscheinen im Menü | `45,90` |
 | `WARN_MINUTES` | Ab wie vielen Minuten vor Schluss „Aufräumen“ erscheint (auch Test-Modus) | `5` |
 | `GO_MINUTES` | Ab wie vielen Minuten vor Schluss „Jetzt zurück in …“ erscheint | `3` |
 | `DEFAULT_THEME` | `system`, `light` oder `dark` | `system` |
@@ -148,7 +148,7 @@ npm run dev                  # Entwicklung mit Hot-Reload
 npm run build && npm start   # Produktionsbuild
 ```
 
-**Release:** Version in `package.json` anheben, Abschnitt in `CHANGELOG.md` ergänzen, committen und einen Tag pushen (`git tag v0.3.2 && git push origin v0.3.2`). GitHub Actions baut dann das Image für amd64/arm64, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release mit dem Text aus dem CHANGELOG an. Dependabot hält npm-Pakete, Docker-Basis-Image und Actions aktuell.
+**Release:** Version in `package.json` anheben, Abschnitt in `CHANGELOG.md` ergänzen, committen und einen Tag pushen (`git tag v0.3.3 && git push origin v0.3.3`). GitHub Actions baut dann das Image für amd64/arm64, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release mit dem Text aus dem CHANGELOG an. Dependabot hält npm-Pakete, Docker-Basis-Image und Actions aktuell.
 
 </details>
 

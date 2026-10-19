@@ -106,6 +106,19 @@
 		<rect x="3" y="3" width="18" height="18" rx="2" />
 		<circle cx="9" cy="9" r="2" />
 		<path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21" />
+	{:else if name === 'traffic'}
+		<rect x="7" y="2" width="10" height="20" rx="5" />
+		<circle cx="12" cy="7" r="1.5" />
+		<circle cx="12" cy="12" r="1.5" />
+		<circle cx="12" cy="17" r="1.5" />
+	{:else if name === 'logout'}
+		<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+		<path d="m16 17 5-5-5-5" />
+		<path d="M21 12H9" />
+	{:else if name === 'chevron'}
+		<path d="m9 18 6-6-6-6" />
+	{:else if name === 'back'}
+		<path d="m15 18-6-6 6-6" />
 	{:else if name === 'user-plus'}
 		<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
 		<circle cx="9" cy="7" r="4" />

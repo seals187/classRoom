@@ -113,9 +113,13 @@
 
 body {
 	margin: 0;
+	/* dvh: auf dem Smartphone ohne die Adressleiste des Browsers */
 	min-height: 100vh;
-	/* Eigener Block-Kontext: der Rand des Kopfbands ragt sonst über den Body hinaus (Scrollbalken). */
-	display: flow-root;
+	min-height: 100dvh;
+	/* Spalte: main füllt die Höhe unter dem Kopfband (egal wie hoch es ist). Als Flex-Container
+	   ragt der Rand des Kopfbands auch nicht über den Body hinaus (sonst Scrollbalken). */
+	display: flex;
+	flex-direction: column;
 	background: var(--bg);
 }
 
@@ -125,6 +129,7 @@ body {
 }
 
 main {
+	flex: 1 0 auto;
 	padding: 0 var(--gutter) 24px;
 }
 

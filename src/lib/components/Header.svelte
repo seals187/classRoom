@@ -111,11 +111,13 @@
 	/** @param {string} hhmm */
 	const short = (hhmm) => hhmm.slice(0, 5);
 
-	// „Jetzt starten“: Beginn = jetzt, Ende = jetzt + Dauer (Dauern aus LESSON_DURATIONS).
+	// „Stunde starten“: Beginn = jetzt, Ende = jetzt + erste Dauer aus LESSON_DURATIONS.
 	const durations = $derived(/** @type {number[]} */ (page.data.lessonDurations ?? [45, 90]));
 	let starting = $state(false);
-	let customOpen = $state(false);
-	let customMinutes = $state(60);
+	const idleEnd = $derived.by(() => {
+		const back = new Date((now ?? new Date()).getTime() + durations[0] * 60000);
+		return `${pad(back.getHours())}:${pad(back.getMinutes())}`;
+	});
 
 	/** @param {number} minutes */
 	async function startLesson(minutes) {
@@ -128,23 +130,12 @@
 				startTime: formatClock(begin),
 				returnTime: `${pad(back.getHours())}:${pad(back.getMinutes())}`
 			});
-			customOpen = false;
 			await invalidateAll();
 		} catch (err) {
 			showError(err);
 		} finally {
 			starting = false;
 		}
-	}
-
-	/** @param {HTMLInputElement} node */
-	const focusOnMount = (node) => node.focus();
-
-	/** @param {SubmitEvent} e */
-	function startCustom(e) {
-		e.preventDefault();
-		const minutes = Math.round(Number(customMinutes));
-		if (minutes >= 1 && minutes <= 600) startLesson(minutes);
 	}
 
 	function toggleLight() {
@@ -232,34 +223,22 @@
 				{/if}
 			</div>
 		{:else}
-			<div class="time placeholder">
-				<span class="not-started">Stunde noch nicht gestartet</span>
-				{#if isTeacher}
-					<div class="start">
-						{#each durations as minutes, i (minutes)}
-							<button class:primary={i === 0} disabled={starting} onclick={() => startLesson(minutes)}>
-								{i === 0 ? `▶ Jetzt starten · ${minutes} min` : `${minutes} min`}
-							</button>
-						{/each}
-						{#if customOpen}
-							<form class="custom" onsubmit={startCustom}>
-								<input
-									type="number"
-									min="1"
-									max="600"
-									bind:value={customMinutes}
-									aria-label="Dauer in Minuten"
-									use:focusOnMount
-									onkeydown={(e) => e.key === 'Escape' && (customOpen = false)}
-								/>
-								<span>min</span>
-								<button type="submit" class="primary" disabled={starting}>Start</button>
-							</form>
-						{:else}
-							<button onclick={() => (customOpen = true)}>Andere…</button>
-						{/if}
-					</div>
-				{/if}
+			<!-- Keine Stunde: Balken mit „Stunde starten“ (Standarddauer ab jetzt), Anpassen öffnet das Menü. -->
+			<div class="time">
+				<div class="idle-bar">
+					{#if isTeacher}
+						<div class="idle-main">
+							<button class="primary" disabled={starting} onclick={() => startLesson(durations[0])}>▶ Stunde starten</button>
+							<span class="idle-info">
+								{durations[0]} min<span class="opt-end">· bis {idleEnd}</span>
+								{#if settings.roomChange}<span class="opt-room">· <Icon name="door" size={14} /> {settings.roomName}</span>{/if}
+							</span>
+						</div>
+						<button class="adjust" onclick={() => (menuOpen = true)}>Anpassen…</button>
+					{:else}
+						<span class="idle-info">Stunde noch nicht gestartet</span>
+					{/if}
+				</div>
 			</div>
 		{/if}
 
@@ -597,42 +576,83 @@
 		font-weight: 800;
 	}
 
-	.placeholder {
-		flex-direction: row;
-		flex-wrap: wrap;
+	/* Keine Stunde: Balken wie der Zeitbalken, Start-Knopf und Infos in der Mitte, „Anpassen…“ rechts. */
+	.idle-bar {
+		display: grid;
+		grid-template-columns: 1fr auto 1fr;
 		align-items: center;
-		gap: 10px 16px;
-		color: var(--muted);
-		font-size: 15px;
+		gap: 12px;
+		min-height: 44px;
+		padding: 5px 12px;
+		border-radius: 10px;
+		background: var(--track);
 	}
 
-	.start {
+	.idle-bar > :first-child {
+		grid-column: 2;
+	}
+
+	.opt-room {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+	}
+
+	/* Wenig Platz (z. B. neben der Klassen-Statistik): zuerst den Raum, dann „bis …“ weglassen. */
+	.time:has(.idle-bar) {
+		container-type: inline-size;
+	}
+
+	/* Auf dem Smartphone darf der Balken umbrechen – dort nichts weglassen. */
+	@media (min-width: 761px) {
+		@container (max-width: 560px) {
+			.opt-room {
+				display: none;
+			}
+		}
+
+		@container (max-width: 440px) {
+			.opt-end {
+				display: none;
+			}
+		}
+	}
+
+	.idle-main {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
-		gap: 8px;
+		gap: 14px;
 	}
 
-	.start button {
-		padding: 7px 14px;
+	.idle-main .primary {
+		padding: 6px 14px;
 		font-size: 14px;
-		color: var(--muted);
-	}
-
-	.start button.primary {
-		color: var(--on-accent);
 		font-weight: 700;
+		white-space: nowrap;
 	}
 
-	.custom {
-		display: flex;
+	.idle-info {
+		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: 5px;
+		color: var(--text);
+		font-size: 14px;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
 	}
 
-	.custom input {
-		width: 70px;
-		padding: 6px 8px;
+	.adjust {
+		justify-self: end;
+		padding: 2px 4px;
+		border: 0;
+		background: transparent;
+		color: var(--accent);
+		font-size: 13px;
+		font-weight: 500;
+	}
+
+	.adjust:hover {
+		text-decoration: underline;
 	}
 
 	.class-stats {
@@ -768,6 +788,20 @@
 		.time {
 			order: 5;
 			flex-basis: 100%;
+		}
+
+		/* Schmal: Start links, „Anpassen…“ rechts, Infos darunter */
+		.idle-bar {
+			display: flex;
+			flex-wrap: wrap;
+			justify-content: space-between;
+			gap: 8px;
+			padding: 8px 10px;
+		}
+
+		.idle-main {
+			flex-wrap: wrap;
+			gap: 6px 12px;
 		}
 
 		.class-stats {

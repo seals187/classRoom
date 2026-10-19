@@ -1,15 +1,20 @@
 // Menüpunkte mit Symbol – zentral, damit Menü, Schüler-Navigation und Seitentitel übereinstimmen.
 
-/** @typedef {{ href: string, label: string, short?: string, icon: string, teacherOnly?: boolean }} NavItem */
+/**
+ * @typedef {{
+ *   href: string, label: string, short?: string, icon: string, teacherOnly?: boolean,
+ *   group: 'Unterricht' | 'Verwaltung', count?: 'students' | 'teachers'
+ * }} NavItem
+ */
 
 /** @type {NavItem[]} */
 export const NAV = [
-	{ href: '/', label: 'Auftrag', icon: 'clipboard' },
-	{ href: '/stundenziele', label: 'Stundenziele', icon: 'target' },
-	{ href: '/selbstlernen', label: 'Selbstlern-Modus', short: 'Selbstlernen', icon: 'book' },
-	{ href: '/test', label: 'Test-Modus', icon: 'test', teacherOnly: true },
-	{ href: '/schueler', label: 'Schüler verwalten', icon: 'users', teacherOnly: true },
-	{ href: '/lehrer', label: 'Lehrer verwalten', icon: 'briefcase', teacherOnly: true }
+	{ href: '/', label: 'Auftrag', icon: 'clipboard', group: 'Unterricht' },
+	{ href: '/stundenziele', label: 'Stundenziele', icon: 'target', group: 'Unterricht' },
+	{ href: '/selbstlernen', label: 'Selbstlern-Modus', short: 'Selbstlernen', icon: 'book', group: 'Unterricht' },
+	{ href: '/test', label: 'Test-Modus', icon: 'test', teacherOnly: true, group: 'Unterricht' },
+	{ href: '/schueler', label: 'Schüler verwalten', icon: 'users', teacherOnly: true, group: 'Verwaltung', count: 'students' },
+	{ href: '/lehrer', label: 'Lehrer verwalten', icon: 'briefcase', teacherOnly: true, group: 'Verwaltung', count: 'teachers' }
 ];
 
 /** @param {string} href */

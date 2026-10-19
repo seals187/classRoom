@@ -53,6 +53,17 @@ CREATE TABLE IF NOT EXISTS files (
 	data BLOB NOT NULL,
 	created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS student_groups (
+	id INTEGER PRIMARY KEY,
+	name TEXT NOT NULL,
+	color TEXT NOT NULL,
+	created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS group_members (
+	group_id INTEGER NOT NULL REFERENCES student_groups(id) ON DELETE CASCADE,
+	student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+	PRIMARY KEY (group_id, student_id)
+);
 CREATE TABLE IF NOT EXISTS backgrounds (
 	id INTEGER PRIMARY KEY,
 	file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
@@ -212,13 +223,51 @@ export function saveSettings(input) {
 		startTime: optionalTime(input.startTime, 'Beginn'),
 		returnTime: optionalTime(input.returnTime, 'Ende')
 	};
+	// Aufräumen ab … min vor Schluss: optional, sonst bleibt der bisherige Wert.
+	const warnMinutes = input.warnMinutes === undefined ? null : Math.round(Number(input.warnMinutes));
+	if (warnMinutes !== null && !(warnMinutes >= 0 && warnMinutes <= 60)) error(400, 'Aufräumen: 0 bis 60 Minuten');
 	const upsert = getDb().prepare(
 		'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
 	);
 	getDb().transaction(() => {
 		for (const [key, value] of Object.entries(settings)) upsert.run(key, typeof value === 'boolean' ? (value ? '1' : '0') : value);
+		if (warnMinutes !== null) upsert.run('warnMinutes', String(warnMinutes));
 	})();
 	return settings;
+}
+
+/** Räume zur Auswahl im Menü; ohne gespeicherte Liste der aktuelle Raum. @returns {string[]} */
+export function getRooms() {
+	const row = /** @type {{ value: string } | undefined} */ (
+		getDb().prepare("SELECT value FROM settings WHERE key = 'rooms'").get()
+	);
+	if (!row) return [getSettings().roomName];
+	try {
+		const list = JSON.parse(row.value);
+		return Array.isArray(list) ? list.filter((v) => typeof v === 'string') : [];
+	} catch {
+		return [];
+	}
+}
+
+/** @param {unknown} input Liste der Räume (doppelte und leere fallen weg, höchstens 20) */
+export function saveRooms(input) {
+	if (!Array.isArray(input)) error(400, 'Keine Raumliste angegeben');
+	const list = [
+		...new Set(input.map((v) => (typeof v === 'string' ? v.trim().slice(0, 60) : '')).filter(Boolean))
+	].slice(0, 20);
+	getDb()
+		.prepare("INSERT INTO settings (key, value) VALUES ('rooms', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+		.run(JSON.stringify(list));
+	return list;
+}
+
+/** Aufräumen ab … min vor Schluss: im Menü gespeichert, sonst WARN_MINUTES aus der .env. */
+export function getWarnMinutes() {
+	const row = /** @type {{ value: string } | undefined} */ (
+		getDb().prepare("SELECT value FROM settings WHERE key = 'warnMinutes'").get()
+	);
+	return row ? Number(row.value) : getConfig().warnMinutes;
 }
 
 export function resetSettings() {
@@ -320,6 +369,16 @@ export function clearTest() {
  * @typedef {{ id: number, firstName: string, lastName: string, username: string | null, goals: Goal[], activeAt: number | null }} Student
  */
 /** @typedef {{ username: string, password: string }} Credentials */
+
+/** Anzahl Schüler und Lehrkräfte – für die Zahlen im Menü. */
+export function countPeople() {
+	const db = getDb();
+	const count = (/** @type {string} */ sql) => /** @type {{ n: number }} */ (db.prepare(sql).get()).n;
+	return {
+		students: count('SELECT COUNT(*) AS n FROM students'),
+		teachers: count("SELECT COUNT(*) AS n FROM users WHERE role = 'teacher'")
+	};
+}
 
 /**
  * @param {'self' | 'lesson'} [kind] Welche Ziele mitgeladen werden

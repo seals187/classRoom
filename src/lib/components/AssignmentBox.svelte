@@ -14,10 +14,11 @@
 	 *   assignment: import('#lib/server/assignment.js').Assignment,
 	 *   canEdit: boolean,
 	 *   students?: { id: number, firstName: string, lastName: string }[],
+	 *   groups?: import('#lib/server/groups.js').Group[],
 	 *   progress?: Record<string, { done: number, total: number }>
 	 * }}
 	 */
-	let { assignment, canEdit, students = [], progress = {} } = $props();
+	let { assignment, canEdit, students = [], groups = [], progress = {} } = $props();
 
 	// Fenster „Ziele aus dem Auftrag“
 	let goalsOpen = $state(false);
@@ -55,6 +56,8 @@
 	// Breite der Bildspalte in % der Karte: 15 % bis 50 % in feinen Schritten
 	const IMAGE_SIZES = Array.from({ length: 15 }, (_, i) => 15 + i * 2.5);
 	let imageSize = $state(30);
+	// Smartphone (Bilder über dem Text): Breite einer Vorschau in % – 15 → 13.5 %, 30 → 27 %, 50 → ganze Breite.
+	const thumbWidth = $derived(imageSize <= 30 ? imageSize * 0.9 : 27 + (imageSize - 30) * 3.65);
 	/** @type {HTMLElement | undefined} */
 	let sectionEl = $state();
 	let fullscreen = $state(false);
@@ -424,6 +427,8 @@
 
 <section
 	class="assignment"
+	role="region"
+	aria-label="Auftrag"
 	class:editing
 	class:fullscreen
 	class:drag-over={dragOver}
@@ -434,6 +439,7 @@
 	ondrop={onDrop}
 	style:--scale={editing ? 1 : scale}
 	style:--image-col={editing ? null : `${imageSize}%`}
+	style:--thumb={editing ? null : `${thumbWidth}%`}
 	bind:this={sectionEl}
 >
 	<!-- Über die ganze Breite: Knöpfe bleiben fix, auch wenn die Bilder größer werden. -->
@@ -609,7 +615,7 @@
 </section>
 
 {#if canEdit}
-	<GoalsFromAssignment bind:open={goalsOpen} steps={stepTexts} {students} />
+	<GoalsFromAssignment bind:open={goalsOpen} steps={stepTexts} title={assignment.title} {students} {groups} />
 {/if}
 
 {#if zoomed}
@@ -1213,8 +1219,9 @@
 			padding: 0;
 		}
 
+		/* Bilder − / +: feste Breite der Vorschauen, damit jeder Klick sichtbar ist. */
 		.assignment:not(.editing) .media {
-			grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+			grid-template-columns: repeat(auto-fill, var(--thumb, 27%));
 		}
 
 		.assignment:not(.editing) .media .thumb:only-of-type {
@@ -1242,23 +1249,24 @@
 			flex-wrap: wrap;
 		}
 
+		/* Kleinere Grundgrößen, A− / A+ wirken aber weiterhin (--scale). */
 		h2 {
-			font-size: 26px;
+			font-size: calc(26px * var(--scale, 1));
 		}
 
 		.content {
-			font-size: 17px;
+			font-size: calc(17px * var(--scale, 1));
 		}
 
 		.content :global(ol > li) {
-			padding-left: 42px;
-			font-size: 19px;
+			padding-left: calc(42px * var(--scale, 1));
+			font-size: calc(19px * var(--scale, 1));
 		}
 
 		.content :global(ol > li::before) {
-			width: 28px;
-			height: 28px;
-			font-size: 14px;
+			width: calc(28px * var(--scale, 1));
+			height: calc(28px * var(--scale, 1));
+			font-size: calc(14px * var(--scale, 1));
 		}
 
 		/* Auf dem Smartphone scrollt die Seite – der Editor braucht keine feste Höhe. */

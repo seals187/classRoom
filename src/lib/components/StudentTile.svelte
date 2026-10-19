@@ -39,7 +39,6 @@
 	// Aktuelles Ziel = erstes noch nicht erledigtes.
 	const current = $derived(student.goals.find((g) => !g.done) ?? null);
 	const expanded = $derived(open || editing);
-	const isSelf = $derived(kind === 'self');
 
 	const minutes = $derived(
 		now && student.activeAt !== null ? Math.max(0, Math.floor((now.getTime() - student.activeAt) / 60000)) : null
@@ -116,27 +115,25 @@
 					{#if complete}<Icon name="check" size={15} />{:else}{done}/{total}{/if}
 				</span>
 			</span>
-			{#if isSelf}
-				<span class="row2">
-					{#if complete}
-						<span class="ok">Alle Ziele erledigt</span>
-					{:else if current}
-						→ {current.text}{#if minutes !== null}<span class="mins">{` · ${since(minutes)}`}</span>{/if}
-					{:else}
-						<span class="none">Noch keine Ziele</span>
+			<!-- Aktuelles Ziel; der Text wird gekürzt, die Zeit rechts bleibt immer sichtbar. -->
+			<span class="row2">
+				{#if complete}
+					<span class="ok">Alle Ziele erledigt</span>
+				{:else if current}
+					<span class="next" title={current.text}>→ {current.text}</span>
+					{#if minutes !== null}
+						<span class="mins" title="seit {since(minutes)} nichts abgehakt">{since(minutes)}</span>
 					{/if}
-				</span>
-			{/if}
+				{:else}
+					<span class="none">Noch keine Ziele</span>
+				{/if}
+			</span>
 		</button>
 
 		<div class="bar-row">
 			<div class="bar" role="img" aria-label="Fortschritt {done} von {total}">
 				<div class="fill" style:width="{percent}%"></div>
 			</div>
-			<!-- Stundenziele haben keine zweite Zeile: die Zeit steht bei orange markierten Kacheln neben dem Balken. -->
-			{#if !isSelf && stale && minutes !== null}
-				<span class="late" title="seit {since(minutes)} nichts abgehakt">{since(minutes)}</span>
-			{/if}
 		</div>
 
 		{#if expanded}
@@ -144,7 +141,7 @@
 				{#if total > 0}
 					<ul>
 						{#each student.goals as goal (goal.id)}
-							<li class:done={goal.done} class:current={isSelf && goal === current}>
+							<li class:done={goal.done} class:current={goal === current}>
 								{#if editing}
 									<input type="checkbox" checked={goal.done} onchange={() => toggle(goal)} aria-label="Erledigt" />
 									<input
@@ -282,39 +279,50 @@
 	}
 
 	.row2 {
+		display: flex;
+		align-items: baseline;
+		gap: 6px;
 		line-height: 16px;
 		min-width: 0;
-		overflow: hidden;
 		padding-left: 16px;
 		color: var(--text);
 		font-size: 13px;
 		white-space: nowrap;
+	}
+
+	/* Nur der Zieltext wird mit „…“ gekürzt. */
+	.next {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
 		text-overflow: ellipsis;
 		opacity: 0.85;
 	}
 
-	.mins,
+	.mins {
+		flex-shrink: 0;
+		color: var(--muted);
+		font-size: 12px;
+		font-variant-numeric: tabular-nums;
+	}
+
 	.none {
 		color: var(--muted);
 	}
 
-	.stale .mins,
-	.late {
+	/* Seit STALE_MINUTES nichts abgehakt: Zeit gelb hervorgehoben. */
+	.stale .mins {
+		padding: 0 6px;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--warn) 18%, transparent);
 		color: var(--warn);
-		font-weight: 600;
+		font-weight: 700;
 	}
 
 	.bar-row {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-	}
-
-	/* Zeilenhöhe = Balkenhöhe, damit markierte Kacheln nicht höher werden. */
-	.late {
-		flex-shrink: 0;
-		font-size: 12px;
-		line-height: 8px;
 	}
 
 	.ok {

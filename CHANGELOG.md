@@ -2,6 +2,26 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [0.3.3] – 2026-10-19
+
+### Neu
+- **Stunden-Karte im Menü:** Status („Keine Stunde aktiv“ / „Stunde läuft“), groß die Dauer bzw. Restzeit, darunter Zeitspanne und Raum; Reiter **Zeit** (15 · 30 · 45 · 90 min oder eigener Beginn/Ende, bei laufender Stunde +5/+10/+15), **Raum** (Auswahlliste mit „Kein Raumwechsel“, eigene Räume hinzufügen/entfernen, „zuletzt“ markiert) und **Aufräumen** (Aufräumen-Phase Aus/2/3/5/10/15 min vor Schluss – überschreibt `WARN_MINUTES`); großer Knopf „▶ Stunde starten“ bzw. „Stunde aktualisieren“ und „Stunde beenden“
+- **Anzeige im Menü:** Zeilen „Ampel · An ›“ und „Hintergrund & Darstellung ›“ öffnen je eine eigene Unterseite
+- **Konto unten im Menü:** Avatar mit Initialen, Name, Rolle (Lehrkraft/Schüler) und Abmelden-Knopf
+- **Gruppen:** In „Ziele aus dem Auftrag“ unter „Für wen? → Gruppe“ Gruppen wählen (Farbpunkt, Mitglieder, Initialen), neu anlegen (Name, Farbe, Schüler) sowie unter „Gruppen verwalten“ bearbeiten und löschen; Gruppen bleiben gespeichert, gelöschte Schüler fallen automatisch heraus
+
+### Geändert
+- **Aktuelles Ziel auch bei den Stundenzielen:** Jede Kachel zeigt „→ nächstes Ziel“ und die Zeit seit dem letzten Abhaken (wie im Selbstlern-Modus); in der aufgeklappten Liste ist das aktuelle Ziel hervorgehoben
+- Die Zeit steht rechts in der Kachel und bleibt immer sichtbar – bei langen Zielen wird nur der Text gekürzt (ganzer Text beim Darüberfahren); ab 15 min gelb hinterlegt
+- **Kopfband ohne Stunde:** statt „Stunde noch nicht gestartet“ und mehreren Knöpfen ein Balken mit „▶ Stunde starten“, „45 min · bis 18:18 · Zimmer 101“ und „Anpassen…“ (öffnet das Menü); bei wenig Platz entfallen Raum und Endzeit
+- **„Ziele aus dem Auftrag“ neu gestaltet:** Untertitel mit Auftrag und Anzahl Ziele, Reiter mit Symbolen („Alle (12)“, „Gruppe“, „Einzelne“), Schüler als Chips mit Initialen, Ziele einzeln entfernbar (✕), Kippschalter „Bestehende Ziele ersetzen“
+- **Menü in Gruppen:** „Unterricht“ (Auftrag, Stundenziele, Selbstlern-Modus, Test-Modus) und „Verwaltung“ (Schüler, Lehrer) mit kleinen Überschriften; neben „Schüler verwalten“ und „Lehrer verwalten“ steht die Anzahl
+
+### Behoben
+- „Ziele aus dem Auftrag“ setzte sich beim automatischen Neuladen der Startseite (alle 10 s) zurück – angepasste Texte und die Auswahl gingen verloren
+- Auf dem Smartphone wirken A− / A+ und Bilder − / + im Auftrag jetzt auch (vorher feste Größen); die Bildvorschauen wachsen bei jedem Klick bis zur ganzen Breite
+- Startseite auf dem Smartphone: Die Stundenziel-Leiste war unten abgeschnitten, weil die Seitenhöhe mit der Höhe des Kopfbands am Desktop gerechnet wurde – jetzt füllt der Auftrag genau den Platz unter dem Kopfband, egal wie hoch es ist
+
 ## [0.3.2] – 2026-10-19
 
 ### Neu
@@ -132,6 +152,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.3.3]: https://github.com/seals187/classRoom/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/seals187/classRoom/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/seals187/classRoom/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/seals187/classRoom/compare/v0.2.3...v0.3.0
