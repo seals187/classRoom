@@ -1,12 +1,19 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { error } from '@sveltejs/kit';
 import { getConfig } from './config.js';
-import { assertUsernameFree, getDb, normalizeUsername } from './db.js';
+import { deleteFilesIfUnused } from './assignment.js';
+import { assertUsernameFree, canSeeStudent, claimOrphans, getDb, getGoalOwner, normalizeUsername } from './db.js';
 import { hashPassword, verifyPassword } from './password.js';
 
 export const SESSION_COOKIE = 'classroom_session';
 
-/** @typedef {{ id: number, username: string, role: 'teacher' | 'student', studentId: number | null, displayName: string }} User */
+/**
+ * `isAdmin`: verwaltet Lehrkräfte und ordnet Schüler zu. `seesAll`: Lehrkraft sieht alle Schüler, nicht nur ihre.
+ * @typedef {{
+ *   id: number, username: string, role: 'teacher' | 'student', studentId: number | null, displayName: string,
+ *   isAdmin: boolean, seesAll: boolean
+ * }} User
+ */
 
 // Wird verglichen, wenn der Benutzer nicht existiert – damit die Antwortzeit nichts verrät.
 const DUMMY_HASH = hashPassword('classroom-dummy');
@@ -94,10 +101,11 @@ function createSession(userId) {
  * @returns {User | null}
  */
 export function validateSession(token) {
-	const row = /** @type {(Omit<User, 'displayName'> & { firstName: string | null, lastName: string | null }) | undefined} */ (
+	const row = /** @type {(Omit<User, 'displayName' | 'isAdmin' | 'seesAll'> & { firstName: string | null, lastName: string | null, isAdmin: number, seesAll: number }) | undefined} */ (
 		getDb()
 			.prepare(
-				`SELECT u.id, u.username, u.role, u.student_id AS studentId, s.first_name AS firstName, s.last_name AS lastName
+				`SELECT u.id, u.username, u.role, u.student_id AS studentId, s.first_name AS firstName, s.last_name AS lastName,
+				   u.is_admin AS isAdmin, u.sees_all AS seesAll
 				 FROM sessions se
 				 JOIN users u ON u.id = se.user_id
 				 LEFT JOIN students s ON s.id = u.student_id
@@ -106,9 +114,69 @@ export function validateSession(token) {
 			.get(hashToken(token), Date.now())
 	);
 	if (!row) return null;
-	const { firstName, lastName, ...user } = row;
-	return { ...user, displayName: firstName ? `${firstName} ${lastName}` : user.username };
+	const { firstName, lastName, isAdmin, seesAll, ...user } = row;
+	const teacher = user.role === 'teacher';
+	return {
+		...user,
+		displayName: firstName ? `${firstName} ${lastName}` : user.username,
+		isAdmin: teacher && isAdmin === 1,
+		seesAll: teacher && seesAll === 1
+	};
 }
+
+// --- Wessen Klasse gilt: Lehrkräfte sehen ihre eigene, Schüler die einer ihrer Lehrkräfte ---
+
+export const TEACHER_COOKIE = 'classroom_teacher';
+const RECENT_LESSON_MS = 12 * 3_600_000;
+
+/**
+ * Lehrkräfte eines Schülers, nach Name.
+ * @param {number} studentId
+ * @returns {{ id: number, username: string }[]}
+ */
+export function teachersOf(studentId) {
+	return /** @type {{ id: number, username: string }[]} */ (
+		getDb()
+			.prepare(
+				`SELECT u.id, u.username FROM student_teachers st JOIN users u ON u.id = st.teacher_id
+				 WHERE st.student_id = ? ORDER BY u.username`
+			)
+			.all(studentId)
+	);
+}
+
+/**
+ * Lehrkraft, deren Auftrag, Stunde und Ziele gelten. Schüler: die im Menü gewählte, sonst die,
+ * die zuletzt (in den letzten 12 h) eine Stunde gestartet hat, sonst die erste. 0 = keine.
+ * @param {User} user
+ * @param {number} chosen Wahl aus dem Cookie (0 = keine)
+ */
+export function resolveOwner(user, chosen) {
+	if (user.role === 'teacher') return user.id;
+	const list = teachersOf(/** @type {number} */ (user.studentId));
+	if (list.some((t) => t.id === chosen)) return chosen;
+	const started = /** @type {{ teacherId: number, at: string }[]} */ (
+		getDb()
+			.prepare("SELECT teacher_id AS teacherId, value AS at FROM teacher_settings WHERE key = 'lessonStartedAt'")
+			.all()
+	).filter((r) => list.some((t) => t.id === r.teacherId) && Date.now() - Number(r.at) < RECENT_LESSON_MS);
+	started.sort((a, b) => Number(b.at) - Number(a.at));
+	return started[0]?.teacherId ?? list[0]?.id ?? 0;
+}
+
+/**
+ * Für die Datenbank-Abfragen: wessen Daten (`owner`) und ob alle Schüler sichtbar sind.
+ * @param {App.Locals} locals
+ * @returns {import('./db.js').Scope}
+ */
+export const scope = (locals) => ({ owner: locals.owner, all: !!locals.user?.seesAll });
+
+/**
+ * Wie `scope`, aber der Admin sieht beim Verwalten immer alle Schüler (um sie zuzuordnen).
+ * @param {App.Locals} locals
+ * @returns {import('./db.js').Scope}
+ */
+export const manageScope = (locals) => ({ owner: locals.owner, all: !!(locals.user?.seesAll || locals.user?.isAdmin) });
 
 /** @param {string} token */
 export function deleteSession(token) {
@@ -154,16 +222,37 @@ export function requireTeacher(locals) {
 	return locals.user;
 }
 
+/** @param {App.Locals} locals */
+export function requireAdmin(locals) {
+	const user = requireTeacher(locals);
+	if (!user.isAdmin) error(403, 'Nur für Admins');
+	return user;
+}
+
 /**
- * Lehrkräfte dürfen alles, Schüler nur ihre eigenen Ziele.
+ * Lehrkräfte nur Schüler, die sie sehen (zum Verwalten: Admin alle), Schüler nur sich selbst.
  * @param {App.Locals} locals
  * @param {number} studentId
  */
 export function requireStudentAccess(locals, studentId) {
 	const user = locals.user;
-	if (user?.role === 'teacher') return;
+	if (user?.role === 'teacher') {
+		if (!canSeeStudent(manageScope(locals), studentId)) error(404, 'Schüler nicht gefunden');
+		return;
+	}
 	if (user?.role === 'student' && user.studentId === studentId) return;
 	error(403, 'Du darfst nur deine eigenen Ziele bearbeiten');
+}
+
+/**
+ * Ziele gehören einer Lehrkraft: bearbeiten nur in deren Klasse (Lehrkraft selbst bzw. ihr Schüler).
+ * @param {App.Locals} locals
+ * @param {number} goalId
+ */
+export function requireGoalAccess(locals, goalId) {
+	const goal = getGoalOwner(goalId);
+	if (goal.teacherId !== locals.owner) error(404, 'Ziel nicht gefunden');
+	requireStudentAccess(locals, goal.studentId);
 }
 
 // --- Lehrkräfte ---
@@ -176,10 +265,20 @@ function validPassword(value) {
 	return v;
 }
 
+/** @typedef {{ id: number, username: string, isAdmin: boolean, seesAll: boolean, students: number }} TeacherInfo */
+
+/** @returns {TeacherInfo[]} */
 export function listTeachers() {
-	return /** @type {{ id: number, username: string }[]} */ (
-		getDb().prepare("SELECT id, username FROM users WHERE role = 'teacher' ORDER BY username").all()
+	const rows = /** @type {{ id: number, username: string, isAdmin: number, seesAll: number, students: number }[]} */ (
+		getDb()
+			.prepare(
+				`SELECT u.id, u.username, u.is_admin AS isAdmin, u.sees_all AS seesAll,
+				   (SELECT COUNT(*) FROM student_teachers st WHERE st.teacher_id = u.id) AS students
+				 FROM users u WHERE u.role = 'teacher' ORDER BY u.username`
+			)
+			.all()
 	);
+	return rows.map((r) => ({ ...r, isAdmin: r.isAdmin === 1, seesAll: r.seesAll === 1 }));
 }
 
 /** @param {Record<string, unknown>} input */
@@ -206,6 +305,23 @@ export function setTeacherPassword(id, input) {
 }
 
 /**
+ * Admin-Rechte und „sieht alle Schüler“ setzen. Das eigene Admin-Recht kann man sich nicht nehmen.
+ * @param {number} id
+ * @param {Record<string, unknown>} input
+ * @param {number} currentUserId
+ */
+export function setTeacherRights(id, input, currentUserId) {
+	const db = getDb();
+	if (!db.prepare("SELECT 1 FROM users WHERE id = ? AND role = 'teacher'").get(id)) error(404, 'Lehrkraft nicht gefunden');
+	if (input.isAdmin !== undefined) {
+		if (id === currentUserId && input.isAdmin !== true) error(400, 'Du kannst dir das Admin-Recht nicht selbst nehmen');
+		db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(input.isAdmin === true ? 1 : 0, id);
+	}
+	if (input.seesAll !== undefined) db.prepare('UPDATE users SET sees_all = ? WHERE id = ?').run(input.seesAll === true ? 1 : 0, id);
+}
+
+/**
+ * Lehrkraft mit Auftrag, Zielen, Gruppen und Bildern löschen. Ihre Schüler ohne andere Lehrkraft gehen an den Admin.
  * @param {number} id
  * @param {number} currentUserId
  */
@@ -216,8 +332,22 @@ export function deleteTeacher(id, currentUserId) {
 		db.prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'teacher'").get()
 	);
 	if (count <= 1) error(400, 'Die letzte Lehrkraft kann nicht gelöscht werden');
+	// Dateien merken, bevor Auftrag und Hintergrund-Bilder mit der Lehrkraft verschwinden.
+	const assignment = /** @type {{ images: string } | undefined} */ (db.prepare('SELECT images FROM assignments WHERE teacher_id = ?').get(id));
+	const backgrounds = /** @type {{ fileId: number }[]} */ (
+		db.prepare('SELECT file_id AS fileId FROM backgrounds WHERE teacher_id = ?').all(id)
+	);
+	/** @type {number[]} */
+	let images = [];
+	try {
+		images = JSON.parse(assignment?.images ?? '[]');
+	} catch {
+		// kaputte Liste → keine Bilder
+	}
 	const { changes } = db.prepare("DELETE FROM users WHERE id = ? AND role = 'teacher'").run(id);
 	if (!changes) error(404, 'Lehrkraft nicht gefunden');
+	deleteFilesIfUnused([...images, ...backgrounds.map((b) => b.fileId)]);
+	claimOrphans();
 }
 
 /**
@@ -237,13 +367,20 @@ export function ensureEnvTeacher() {
 	const existing = /** @type {{ id: number, role: string, hash: string } | undefined} */ (
 		db.prepare('SELECT id, role, password_hash AS hash FROM users WHERE username = ?').get(username)
 	);
+	// Das Konto aus der .env ist immer Admin.
 	if (!existing) {
-		db.prepare("INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'teacher')").run(username, hashPassword(password));
-		console.log(`[classRoom] Lehrerkonto „${username}“ aus der .env angelegt.`);
+		db.prepare("INSERT INTO users (username, password_hash, role, is_admin) VALUES (?, ?, 'teacher', 1)").run(
+			username,
+			hashPassword(password)
+		);
+		console.log(`[classRoom] Lehrerkonto „${username}“ (Admin) aus der .env angelegt.`);
 	} else if (existing.role !== 'teacher') {
 		console.warn(`[classRoom] TEACHER_USERNAME „${username}“ ist bereits ein Schülerkonto – bitte anderen Namen wählen.`);
-	} else if (!verifyPassword(password, existing.hash)) {
-		db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(password), existing.id);
-		console.log(`[classRoom] Passwort von „${username}“ auf den Wert aus der .env gesetzt.`);
+	} else {
+		db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(existing.id);
+		if (!verifyPassword(password, existing.hash)) {
+			db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(password), existing.id);
+			console.log(`[classRoom] Passwort von „${username}“ auf den Wert aus der .env gesetzt.`);
+		}
 	}
 }

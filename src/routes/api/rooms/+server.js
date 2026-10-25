@@ -6,5 +6,5 @@ import { saveRooms } from '#lib/server/db.js';
 export async function PUT({ locals, request }) {
 	requireTeacher(locals);
 	const { rooms } = await request.json();
-	return json(saveRooms(rooms));
+	return json(saveRooms(locals.owner, rooms));
 }

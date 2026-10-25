@@ -2,6 +2,22 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [0.3.5] – 2026-10-25
+
+### Neu
+- **Jede Lehrkraft hat ihre eigene Klasse:** Lehrkräfte sehen nur ihre eigenen Schüler. Auftrag, Stunden- und Selbstlern-Ziele, laufende Stunde, Wochenplan, Räume, Gruppen, Test-Modus, Ampel und Hintergrund sind pro Lehrkraft getrennt. Neue Schüler gehören der Lehrkraft, die sie anlegt
+- **Admin:** Das Konto aus der `.env` (`TEACHER_USERNAME`) ist immer Admin und kann weitere Lehrkräfte zum Admin machen. Nur der Admin legt Lehrkräfte an und löscht sie, setzt fremde Passwörter und schaltet pro Lehrkraft „Sieht alle Schüler“ ein. Unter „Schüler verwalten“ ordnet er jeden Schüler einer oder mehreren Lehrkräften zu
+- **Mein Konto:** Lehrkräfte ohne Admin-Recht ändern im Menü unter „Mein Konto“ nur ihr eigenes Passwort
+- **Schüler mit mehreren Lehrkräften** sehen die Klasse der Lehrkraft, die zuletzt eine Stunde gestartet hat, und können im Menü unter „Lehrkraft“ wechseln
+- **Wochenplan:** Im Menü unter „Wochenplan ›“ pro Wochentag (Mo–So) beliebig viele Stunden mit Beginn, Ende und Raum (oder kein Raumwechsel) festlegen. Die heutigen Stunden erscheinen im Reiter „Zeit“ zum Antippen (die nächste ist vorausgewählt), und der Startbalken im Kopfband zeigt die nächste geplante Stunde („45 min · Plan 14:00–14:45 · Zimmer 101“)
+
+### Geändert
+- **Update von einer früheren Version:** Alle bestehenden Schüler, Ziele, Gruppen, der Auftrag und die Hintergrund-Bilder gehen an den Admin; die bisherigen Einstellungen (Stunde, Räume, Wochenplan, Ampel, Hintergrund) bekommt jede Lehrkraft als Kopie. Wird eine Lehrkraft gelöscht, gehen ihre Schüler ohne andere Lehrkraft an den Admin
+- **Stunde starten läuft ab dem Klick:** Mit eigenen oder geplanten Zeiten (z. B. 14:00–14:45) beginnt die Stunde beim Klick auf „▶ Stunde starten“ und zeigt die volle Dauer („noch 45 min“), auch wenn der Beginn schon vorbei ist oder erst noch kommt
+
+### Behoben
+- **Hintergrund-Bilder verschwanden:** Beim Speichern des Auftrags wurden hochgeladene Hintergrund-Bilder gelöscht, die älter als eine Stunde waren. Jetzt werden nur Bilder aufgeräumt, die weder ein Auftrag noch ein Hintergrund mehr braucht
+
 ## [0.3.4] – 2026-10-25
 
 ### Behoben
@@ -157,6 +173,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.3.5]: https://github.com/seals187/classRoom/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/seals187/classRoom/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/seals187/classRoom/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/seals187/classRoom/compare/v0.3.1...v0.3.2

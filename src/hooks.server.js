@@ -1,9 +1,19 @@
 import { json } from '@sveltejs/kit';
-import { clearSessionCookie, ensureEnvTeacher, SESSION_COOKIE, validateSession } from '#lib/server/auth.js';
+import {
+	clearSessionCookie,
+	ensureEnvTeacher,
+	resolveOwner,
+	SESSION_COOKIE,
+	TEACHER_COOKIE,
+	validateSession
+} from '#lib/server/auth.js';
+import { claimOrphans } from '#lib/server/db.js';
 import { getConfig } from '#lib/server/config.js';
 
 export function init() {
 	ensureEnvTeacher();
+	// Nach einem Update: bestehende Schüler, Ziele, Auftrag usw. gehören dem Admin.
+	claimOrphans();
 }
 
 const PUBLIC_PATHS = ['/login'];
@@ -44,6 +54,8 @@ export async function handle({ event, resolve: resolvePage }) {
 	const user = token ? validateSession(token) : null;
 	if (token && !user) clearSessionCookie(event.cookies, event.request, event.url);
 	event.locals.user = user;
+	// Wessen Klasse gilt: Lehrkraft selbst bzw. bei Schülern eine ihrer Lehrkräfte (Wahl im Menü).
+	event.locals.owner = user ? resolveOwner(user, Number(event.cookies.get(TEACHER_COOKIE)) || 0) : 0;
 
 	const path = event.url.pathname;
 	const isApi = path.startsWith('/api/');

@@ -4,5 +4,5 @@ import { saveNoiseSettings } from '#lib/server/db.js';
 
 export async function PUT({ locals, request }) {
 	requireTeacher(locals);
-	return json(saveNoiseSettings(await request.json()));
+	return json(saveNoiseSettings(locals.owner, await request.json()));
 }

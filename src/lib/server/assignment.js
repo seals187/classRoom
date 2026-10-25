@@ -19,10 +19,12 @@ function parseIds(json) {
 	}
 }
 
-/** @returns {Assignment} */
-export function getAssignment() {
+/** @param {number} owner Lehrkraft @returns {Assignment} */
+export function getAssignment(owner) {
 	const row = /** @type {{ title: string, body: string, images: string, format: string, updatedAt: string | null } | undefined} */ (
-		getDb().prepare('SELECT title, body, images, format, updated_at AS updatedAt FROM assignment WHERE id = 1').get()
+		getDb()
+			.prepare('SELECT title, body, images, format, updated_at AS updatedAt FROM assignments WHERE teacher_id = ?')
+			.get(owner)
 	);
 	if (!row) return { title: '', html: '', images: [], updatedAt: null };
 	// Aufträge von vor dem Editor sind noch Markdown. Auch gespeichertes HTML erneut bereinigen –
@@ -31,8 +33,8 @@ export function getAssignment() {
 	return { title: row.title, html, images: parseIds(row.images), updatedAt: row.updatedAt };
 }
 
-/** @param {Record<string, unknown>} input */
-export function saveAssignment(input) {
+/** @param {number} owner @param {Record<string, unknown>} input */
+export function saveAssignment(owner, input) {
 	const title = typeof input.title === 'string' ? input.title.trim() : '';
 	if (title.length > 120) error(400, 'Titel ist zu lang (max. 120 Zeichen)');
 	if (typeof input.html === 'string' && input.html.length > 200_000) error(400, 'Text ist zu lang');
@@ -47,39 +49,55 @@ export function saveAssignment(input) {
 
 	db.transaction(() => {
 		db.prepare(
-			`INSERT INTO assignment (id, title, body, images, format, updated_at) VALUES (1, ?, ?, ?, 'html', CURRENT_TIMESTAMP)
-			 ON CONFLICT(id) DO UPDATE SET title = excluded.title, body = excluded.body,
+			`INSERT INTO assignments (teacher_id, title, body, images, format, updated_at) VALUES (?, ?, ?, ?, 'html', CURRENT_TIMESTAMP)
+			 ON CONFLICT(teacher_id) DO UPDATE SET title = excluded.title, body = excluded.body,
 			   images = excluded.images, format = 'html', updated_at = excluded.updated_at`
-		).run(title, body, JSON.stringify(images));
-		deleteUnusedFiles(new Set([...images, ...[...body.matchAll(/\/api\/files\/(\d+)/g)].map((m) => Number(m[1]))]));
+		).run(owner, title, body, JSON.stringify(images));
+		deleteUnusedFiles();
 	})();
-	return getAssignment();
+	return getAssignment(owner);
 }
 
-/** Auftrag samt seiner Bilder löschen. */
-export function deleteAssignment() {
+/** Auftrag samt seiner Bilder löschen. @param {number} owner */
+export function deleteAssignment(owner) {
 	const db = getDb();
-	const { images } = getAssignment();
+	const { images } = getAssignment(owner);
 	db.transaction(() => {
-		db.prepare('DELETE FROM assignment WHERE id = 1').run();
-		const remove = db.prepare('DELETE FROM files WHERE id = ?');
-		for (const id of images) remove.run(id);
+		db.prepare('DELETE FROM assignments WHERE teacher_id = ?').run(owner);
+		deleteFilesIfUnused(images);
 	})();
-	return getAssignment();
+	return getAssignment(owner);
+}
+
+/** Dateien, die noch ein Auftrag (Bildliste oder Text) oder ein Hintergrund braucht – über alle Lehrkräfte. */
+function usedFiles() {
+	const db = getDb();
+	const used = new Set(
+		/** @type {{ fileId: number }[]} */ (db.prepare('SELECT file_id AS fileId FROM backgrounds').all()).map((r) => r.fileId)
+	);
+	for (const row of /** @type {{ body: string, images: string }[]} */ (db.prepare('SELECT body, images FROM assignments').all())) {
+		for (const id of parseIds(row.images)) used.add(id);
+		for (const m of row.body.matchAll(/\/api\/files\/(\d+)/g)) used.add(Number(m[1]));
+	}
+	return used;
+}
+
+/** Diese Dateien löschen, falls nichts mehr sie braucht. @param {number[]} ids */
+export function deleteFilesIfUnused(ids) {
+	const used = usedFiles();
+	const remove = getDb().prepare('DELETE FROM files WHERE id = ?');
+	for (const id of ids) if (!used.has(id)) remove.run(id);
 }
 
 /**
- * Bilder, die im Auftrag nicht mehr vorkommen, aufräumen. Frische Uploads (< 1 h) bleiben,
- * falls gerade jemand anderes noch am Bearbeiten ist.
- * @param {Set<number>} used
+ * Bilder, die in keinem Auftrag und keinem Hintergrund mehr vorkommen, aufräumen. Frische Uploads (< 1 h)
+ * bleiben, falls gerade jemand noch am Bearbeiten ist.
  */
-function deleteUnusedFiles(used) {
-	const db = getDb();
+function deleteUnusedFiles() {
 	const candidates = /** @type {{ id: number }[]} */ (
-		db.prepare("SELECT id FROM files WHERE created_at < datetime('now', '-1 hour')").all()
+		getDb().prepare("SELECT id FROM files WHERE created_at < datetime('now', '-1 hour')").all()
 	);
-	const remove = db.prepare('DELETE FROM files WHERE id = ?');
-	for (const { id } of candidates) if (!used.has(id)) remove.run(id);
+	deleteFilesIfUnused(candidates.map((c) => c.id));
 }
 
 /**

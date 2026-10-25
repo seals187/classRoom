@@ -1,9 +1,10 @@
 import { getAssignment } from '#lib/server/assignment.js';
+import { scope } from '#lib/server/auth.js';
 import { listStudents } from '#lib/server/db.js';
 
-export function load() {
+export function load({ locals }) {
 	return {
-		students: listStudents('lesson'),
-		assignmentTitle: getAssignment().title
+		students: listStudents(scope(locals), 'lesson'),
+		assignmentTitle: getAssignment(locals.owner).title
 	};
 }

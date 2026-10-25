@@ -4,11 +4,11 @@ import { resetSettings, saveSettings } from '#lib/server/db.js';
 
 export async function PUT({ locals, request }) {
 	requireTeacher(locals);
-	return json(saveSettings(await request.json()));
+	return json(saveSettings(locals.owner, await request.json()));
 }
 
 // Gespeicherte Werte verwerfen → wieder die Standardwerte aus der .env.
 export function DELETE({ locals }) {
 	requireTeacher(locals);
-	return json(resetSettings());
+	return json(resetSettings(locals.owner));
 }

@@ -6,7 +6,8 @@
 	import { invalidateAll } from '$app/navigation';
 	import { api } from '#lib/api.js';
 	import { showError } from '#lib/dialog.svelte.js';
-	import { formatClock, lessonSpan, pad } from '#lib/time.js';
+	import { formatClock, lessonSpan, minutesBetween, pad } from '#lib/time.js';
+	import { nextSlot } from '#lib/schedule.js';
 	import logo from '#lib/assets/logo.svg';
 	import Icon from './Icon.svelte';
 	import Menu from './Menu.svelte';
@@ -111,24 +112,28 @@
 	/** @param {string} hhmm */
 	const short = (hhmm) => hhmm.slice(0, 5);
 
-	// „Stunde starten“: Beginn = jetzt, Ende = jetzt + erste Dauer aus LESSON_DURATIONS.
+	// „Stunde starten“: Beginn = jetzt, Ende = jetzt + Dauer der nächsten geplanten Stunde (Wochenplan)
+	// bzw. der ersten Dauer aus LESSON_DURATIONS.
 	const durations = $derived(/** @type {number[]} */ (page.data.lessonDurations ?? [45, 90]));
+	const plan = $derived(nextSlot(page.data.schedule ?? [], now ?? new Date()));
+	const idleMinutes = $derived(plan ? minutesBetween(plan.start, plan.end) : durations[0]);
 	let starting = $state(false);
 	const idleEnd = $derived.by(() => {
-		const back = new Date((now ?? new Date()).getTime() + durations[0] * 60000);
+		const back = new Date((now ?? new Date()).getTime() + idleMinutes * 60000);
 		return `${pad(back.getHours())}:${pad(back.getMinutes())}`;
 	});
 
-	/** @param {number} minutes */
-	async function startLesson(minutes) {
+	/** @param {number} minutes @param {import('#lib/schedule.js').Slot | null} [slot] mit Raum aus dem Wochenplan */
+	async function startLesson(minutes, slot = null) {
 		starting = true;
 		try {
 			const begin = new Date();
 			const back = new Date(begin.getTime() + minutes * 60000);
 			await api('/api/settings', 'PUT', {
-				roomName: settings.roomName,
+				roomName: slot?.room || settings.roomName,
+				...(slot && { roomChange: slot.room !== '' }),
 				startTime: formatClock(begin),
-				returnTime: `${pad(back.getHours())}:${pad(back.getMinutes())}`
+				returnTime: formatClock(back)
 			});
 			await invalidateAll();
 		} catch (err) {
@@ -228,10 +233,12 @@
 				<div class="idle-bar">
 					{#if isTeacher}
 						<div class="idle-main">
-							<button class="primary" disabled={starting} onclick={() => startLesson(durations[0])}>▶ Stunde starten</button>
+							<button class="primary" disabled={starting} onclick={() => startLesson(idleMinutes, plan)}>▶ Stunde starten</button>
 							<span class="idle-info">
-								{durations[0]} min<span class="opt-end">· bis {idleEnd}</span>
-								{#if settings.roomChange}<span class="opt-room">· <Icon name="door" size={14} /> {settings.roomName}</span>{/if}
+								{idleMinutes} min<span class="opt-end">· {plan ? `Plan ${plan.start}–${plan.end}` : `bis ${idleEnd}`}</span>
+								{#if plan ? plan.room : settings.roomChange}
+									<span class="opt-room">· <Icon name="door" size={14} /> {plan ? plan.room : settings.roomName}</span>
+								{/if}
 							</span>
 						</div>
 						<button class="adjust" onclick={() => (menuOpen = true)}>Anpassen…</button>

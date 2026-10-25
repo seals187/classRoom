@@ -1,5 +1,5 @@
 import { getTest } from '#lib/server/db.js';
 
-export function load() {
-	return { test: getTest() };
+export function load({ locals }) {
+	return { test: getTest(locals.owner) };
 }

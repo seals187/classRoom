@@ -1,25 +1,27 @@
-// Aktueller Ampel-Zustand vom Lehrer-Gerät, nur im Speicher. Es kommt nur die Farbe an – kein Ton.
+// Aktueller Ampel-Zustand vom Gerät jeder Lehrkraft, nur im Speicher. Es kommt nur die Farbe an – kein Ton.
 
 /** @typedef {import('#lib/noise.svelte.js').NoiseStatus} NoiseStatus */
 
 const STALE_MS = 8000; // ohne Meldung so lange → Ampel gilt als aus (Tab geschlossen o. Ä.)
 const STATUSES = ['green', 'yellow', 'red'];
 
-/** @type {{ status: NoiseStatus, updated: number } | null} */
-let current = null;
+/** @type {Map<number, { status: NoiseStatus, updated: number }>} je Lehrkraft */
+const current = new Map();
 
-/** @param {unknown} input */
-export function setLiveNoise(input) {
+/** @param {number} owner @param {unknown} input */
+export function setLiveNoise(owner, input) {
 	const body = /** @type {{ active?: unknown, status?: unknown }} */ (input ?? {});
 	if (!body.active) {
-		current = null;
+		current.delete(owner);
 		return;
 	}
 	if (!STATUSES.includes(/** @type {string} */ (body.status))) throw new Error('Ungültiger Status');
-	current = { status: /** @type {NoiseStatus} */ (body.status), updated: Date.now() };
+	current.set(owner, { status: /** @type {NoiseStatus} */ (body.status), updated: Date.now() });
 }
 
-export function getLiveNoise() {
-	if (!current || Date.now() - current.updated > STALE_MS) return { active: false, status: 'green' };
-	return { active: true, status: current.status };
+/** @param {number} owner */
+export function getLiveNoise(owner) {
+	const entry = current.get(owner);
+	if (!entry || Date.now() - entry.updated > STALE_MS) return { active: false, status: 'green' };
+	return { active: true, status: entry.status };
 }

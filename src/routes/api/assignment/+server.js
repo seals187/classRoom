@@ -4,10 +4,10 @@ import { requireTeacher } from '#lib/server/auth.js';
 
 export async function PUT({ locals, request }) {
 	requireTeacher(locals);
-	return json(saveAssignment(await request.json()));
+	return json(saveAssignment(locals.owner, await request.json()));
 }
 
 export function DELETE({ locals }) {
 	requireTeacher(locals);
-	return json(deleteAssignment());
+	return json(deleteAssignment(locals.owner));
 }

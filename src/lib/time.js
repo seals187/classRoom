@@ -39,6 +39,12 @@ export function lessonSpan(startTime, endTime, now) {
 	return { start, end };
 }
 
+/** Minuten von … bis, „HH:MM“ (über Mitternacht richtig). @param {string} from @param {string} to */
+export function minutesBetween(from, to) {
+	const toMin = (/** @type {string} */ t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+	return (toMin(to) - toMin(from) + 1440) % 1440 || 1440;
+}
+
 /** @param {number} ms */
 export function formatDuration(ms) {
 	const total = Math.floor(ms / 1000);

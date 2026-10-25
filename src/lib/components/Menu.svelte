@@ -3,7 +3,8 @@
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api.js';
-	import { formatClock, lessonSpan } from '#lib/time.js';
+	import { formatClock, lessonSpan, minutesBetween } from '#lib/time.js';
+	import { DAYS, DAY_NAMES, nextSlot, slotsOf, weekday } from '#lib/schedule.js';
 	import { clock } from '#lib/clock.svelte.js';
 	import Icon from './Icon.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
@@ -24,7 +25,12 @@
 
 	const isTeacher = $derived(user.role === 'teacher');
 	// Schüler sehen nur ihre Seiten, Darstellung und Abmelden.
-	const links = $derived(isTeacher ? NAV : NAV.filter((item) => !item.teacherOnly));
+	// Ohne Admin-Recht verwaltet man unter „Lehrer“ nur das eigene Konto.
+	const links = $derived(
+		(isTeacher ? NAV : NAV.filter((item) => !item.teacherOnly)).map((item) =>
+			item.href === '/lehrer' && !user.isAdmin ? { ...item, label: 'Mein Konto', count: undefined } : item
+		)
+	);
 	// In Gruppen mit Überschrift (Unterricht, Verwaltung) – leere Gruppen entfallen.
 	const groups = $derived(
 		[...new Set(links.map((item) => item.group))].map((name) => ({ name, items: links.filter((item) => item.group === name) }))
@@ -32,10 +38,14 @@
 	/** @type {{ students: number, teachers: number } | null} */
 	const counts = $derived(page.data.counts ?? null);
 
-	// Unterseiten im Menü: Ampel, Hintergrund & Darstellung.
-	/** @type {'main' | 'noise' | 'display'} */
+	// Unterseiten im Menü: Wochenplan, Ampel, Hintergrund & Darstellung.
+	/** @type {'main' | 'plan' | 'noise' | 'display'} */
 	let view = $state('main');
-	const TITLES = $derived({ noise: 'Ampel', display: page.data.background?.canChoose ? 'Hintergrund & Darstellung' : 'Darstellung' });
+	const TITLES = $derived({
+		plan: 'Wochenplan',
+		noise: 'Ampel',
+		display: page.data.background?.canChoose ? 'Hintergrund & Darstellung' : 'Darstellung'
+	});
 
 	/** @param {Date} d */
 	const hhmm = (d) => formatClock(d).slice(0, 5);
@@ -46,12 +56,6 @@
 		const d = new Date();
 		d.setHours(h, m + minutes, 0, 0);
 		return hhmm(d);
-	}
-
-	/** Minuten von … bis (über Mitternacht richtig). @param {string} from @param {string} to */
-	function minutesBetween(from, to) {
-		const toMin = (/** @type {string} */ t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
-		return (toMin(to) - toMin(from) + 1440) % 1440 || 1440;
 	}
 
 	// --- Stunden-Karte ---
@@ -86,13 +90,23 @@
 	const rooms = $derived(/** @type {string[]} */ (page.data.rooms ?? []));
 	const from = $derived(begin || hhmm(clock.now ?? new Date()));
 	const to = $derived(end || addMinutes(from, chosen));
-	// Minuten bis zum Ende laut Eingabe (ab jetzt bzw. ab Beginn, falls der noch kommt; negativ = überzogen).
+	// Laufende Stunde: Minuten bis zum (evtl. verlängerten) Ende, negativ = überzogen.
 	const left = $derived.by(() => {
 		const now = clock.now ?? new Date();
-		const { start, end: stop } = lessonSpan(from, to, now);
-		if (!start || !stop) return 0;
-		return Math.ceil((stop.getTime() - Math.max(now.getTime(), start.getTime())) / 60000);
+		const { end: stop } = lessonSpan(from, to, now);
+		return stop ? Math.ceil((stop.getTime() - now.getTime()) / 60000) : 0;
 	});
+
+	// Wochenplan: heutige Stunden zum Auswählen, die nächste ist vorausgewählt.
+	const schedule = $derived(/** @type {import('#lib/schedule.js').Slot[]} */ (page.data.schedule ?? []));
+	const today = $derived(slotsOf(schedule, weekday(clock.now ?? new Date())));
+
+	/** @param {import('#lib/schedule.js').Slot} slot */
+	function pick(slot) {
+		begin = slot.start;
+		end = slot.end;
+		roomChoice = slot.room;
+	}
 	const warnChoices = $derived([...new Set([...WARN_CHOICES, warn])].sort((a, b) => a - b));
 
 	// Geschlossen → beim nächsten Öffnen wieder Hauptseite und Reiter „Zeit“.
@@ -107,7 +121,7 @@
 	// Gespeicherte Werte als Text: ändert sich nur, wenn wirklich etwas anders gespeichert ist –
 	// nicht bei jedem Neuladen der Seite (alle 10 s), sonst springen Eingaben im Menü zurück.
 	const stored = $derived(
-		JSON.stringify([settings, running, durations[0], page.data.warnMinutes, noiseSettings])
+		JSON.stringify([settings, running, durations[0], page.data.warnMinutes, noiseSettings, schedule])
 	);
 
 	// Beim Öffnen und nach dem Speichern die gespeicherten Werte übernehmen.
@@ -120,6 +134,9 @@
 			end = running ? settings.returnTime.slice(0, 5) : '';
 			roomChoice = settings.roomChange ? settings.roomName : '';
 			warn = page.data.warnMinutes ?? 5;
+			const next = running ? null : nextSlot(schedule, clock.now ?? new Date());
+			if (next) pick(next);
+			plan = schedule.map((s) => ({ ...s }));
 			if (noiseSettings) noiseForm = { ...noiseSettings };
 		});
 	});
@@ -150,15 +167,20 @@
 		}
 	}
 
+	// Starten: die Stunde läuft ab dem Klick so lange wie Beginn bis Ende (14:00–14:45 → noch 45 min).
+	// Aktualisieren: gespeicherter Beginn bleibt, Ende wie eingegeben bzw. verlängert.
 	function startLesson() {
 		const wasRunning = running;
+		const now = new Date();
+		const times = wasRunning
+			? { startTime: begin || hhmm(now), returnTime: to }
+			: { startTime: formatClock(now), returnTime: formatClock(new Date(now.getTime() + minutesBetween(from, to) * 60000)) };
 		run(
 			() =>
 				api('/api/settings', 'PUT', {
 					roomName: roomChoice || settings.roomName,
 					roomChange: roomChoice !== '',
-					startTime: begin || hhmm(new Date()),
-					returnTime: to,
+					...times,
 					warnMinutes: warn
 				}),
 			wasRunning ? 'Stunde aktualisiert' : 'Stunde gestartet'
@@ -184,6 +206,52 @@
 	function removeRoom(name) {
 		if (roomChoice === name) roomChoice = '';
 		run(() => api('/api/rooms', 'PUT', { rooms: rooms.filter((r) => r !== name) }), 'Raum entfernt');
+	}
+
+	// --- Schüler mit mehreren Lehrkräften: wessen Auftrag und Stunde sie sehen ---
+
+	const teachers = $derived(/** @type {{ id: number, username: string }[]} */ (page.data.teachers ?? []));
+
+	/** @param {number} teacherId */
+	function chooseTeacher(teacherId) {
+		run(() => api('/api/context', 'PUT', { teacherId }), 'Lehrkraft gewechselt');
+	}
+
+	// --- Wochenplan ---
+
+	/** Bearbeitete Kopie des Plans; erst „Speichern“ schreibt ihn. @type {import('#lib/schedule.js').Slot[]} */
+	let plan = $state([]);
+	let planDay = $state(0);
+	let planMessage = $state('');
+	const planSlots = $derived(plan.filter((s) => s.day === planDay));
+
+	function openPlan() {
+		planDay = weekday(clock.now ?? new Date());
+		planMessage = '';
+		view = 'plan';
+	}
+
+	// Neue Stunde schließt an die letzte des Tages an (sonst 08:00), Dauer wie die erste aus LESSON_DURATIONS.
+	function addSlot() {
+		const last = slotsOf(plan, planDay).at(-1);
+		const start = last ? last.end : '08:00';
+		plan.push({ day: planDay, start, end: addMinutes(start, durations[0]), room: '' });
+	}
+
+	/** @param {import('#lib/schedule.js').Slot} slot */
+	function removeSlot(slot) {
+		plan.splice(plan.indexOf(slot), 1);
+	}
+
+	async function savePlan() {
+		planMessage = '';
+		try {
+			await api('/api/schedule', 'PUT', { schedule: plan });
+			await invalidateAll();
+			planMessage = 'Gespeichert';
+		} catch (err) {
+			planMessage = err instanceof Error ? err.message : String(err);
+		}
 	}
 
 	// --- Ampel ---
@@ -266,7 +334,7 @@
 						<div class="summary">
 							<span class="kicker">{running ? (left >= 0 ? 'Noch' : 'Überzogen') : 'Nächste Stunde'}</span>
 							<strong class="big">
-								{running ? `${left >= 0 ? '' : '+'}${Math.abs(left)} min` : `${left > 0 ? left : minutesBetween(from, to)} min`}
+								{running ? `${left >= 0 ? '' : '+'}${Math.abs(left)} min` : `${minutesBetween(from, to)} min`}
 							</strong>
 							<span class="meta">
 								{from} – {to} ·
@@ -291,6 +359,15 @@
 										{/each}
 									</div>
 								{:else}
+									{#if today.length > 0}
+										<div class="slots" aria-label="Heute laut Wochenplan">
+											{#each today as slot, i (i)}
+												<button class:on={begin === slot.start && end === slot.end} onclick={() => pick(slot)}>
+													{slot.start}–{slot.end}{#if slot.room}<small>{slot.room}</small>{/if}
+												</button>
+											{/each}
+										</div>
+									{/if}
 									<div class="chips" aria-label="Dauer in Minuten">
 										{#each chips as m (m)}
 											<button class:on={!end && chosen === m} onclick={() => choose(m)}>{m}</button>
@@ -307,8 +384,8 @@
 										<input type="time" value={to} oninput={(e) => (end = e.currentTarget.value)} />
 									</label>
 								</div>
-								{#if begin && !running}
-									<button class="text-link" onclick={() => (begin = '')}>Beginn wieder auf jetzt</button>
+								{#if !running}
+									<p class="hint">Läuft ab dem Klick {minutesBetween(from, to)} min.</p>
 								{/if}
 							</div>
 						{:else if tab === 'raum'}
@@ -357,6 +434,30 @@
 						{/if}
 						{#if message}<p class="message">{message}</p>{/if}
 					</div>
+					<button class="row" onclick={openPlan}>
+						<Icon name="calendar" size={18} />
+						Wochenplan
+						<span class="value">{schedule.length ? `${schedule.length} Stunden` : 'leer'}</span>
+						<Icon name="chevron" size={16} />
+					</button>
+				</section>
+			{:else if teachers.length > 1}
+				<section class="display">
+					<h3 class="group">Lehrkraft</h3>
+					<div class="rooms" role="radiogroup" aria-label="Lehrkraft">
+						{#each teachers as teacher (teacher.id)}
+							<label class="room">
+								<input
+									type="radio"
+									name="teacher"
+									checked={page.data.owner === teacher.id}
+									onchange={() => chooseTeacher(teacher.id)}
+								/>
+								<span>{teacher.username}</span>
+							</label>
+						{/each}
+					</div>
+					{#if message}<p class="message">{message}</p>{/if}
 				</section>
 			{/if}
 
@@ -383,7 +484,46 @@
 				{TITLES[view]}
 			</button>
 
-			{#if view === 'noise' && noiseSettings}
+			{#if view === 'plan'}
+				<div class="sub">
+					<div class="tabs days" role="tablist" aria-label="Wochentag">
+						{#each DAYS as day, i (day)}
+							<button
+								role="tab"
+								aria-selected={planDay === i}
+								class:on={planDay === i}
+								class:has={plan.some((s) => s.day === i)}
+								title={DAY_NAMES[i]}
+								onclick={() => (planDay = i)}>{day}</button
+							>
+						{/each}
+					</div>
+					{#each planSlots as slot (slot)}
+						<div class="slot">
+							<input type="time" bind:value={slot.start} aria-label="Beginn" />
+							<span>–</span>
+							<input type="time" bind:value={slot.end} aria-label="Ende" />
+							<button class="remove" title="Stunde entfernen" aria-label="Stunde entfernen" onclick={() => removeSlot(slot)}>
+								<Icon name="close" size={12} />
+							</button>
+							<span class="door"><Icon name="door" size={14} /></span>
+							<select bind:value={slot.room} aria-label="Raum nach der Stunde">
+								<option value="">Kein Raumwechsel</option>
+								{#each rooms as room (room)}<option value={room}>{room}</option>{/each}
+								{#if slot.room && !rooms.includes(slot.room)}<option value={slot.room}>{slot.room}</option>{/if}
+							</select>
+						</div>
+					{:else}
+						<p class="hint">Am {DAY_NAMES[planDay]} ist noch nichts geplant.</p>
+					{/each}
+					<button class="add-link" onclick={addSlot}>+ Stunde hinzufügen</button>
+					<p class="hint">Gestartet wird immer mit „▶ Stunde starten“ – die geplante Dauer läuft ab dem Klick.</p>
+					<div class="actions">
+						<button class="primary" onclick={savePlan}>Speichern</button>
+					</div>
+					{#if planMessage}<p class="message">{planMessage}</p>{/if}
+				</div>
+			{:else if view === 'noise' && noiseSettings}
 				<form class="sub" onsubmit={saveNoise}>
 					<label class="inline">
 						<input type="checkbox" bind:checked={noiseForm.enabled} />
@@ -790,6 +930,97 @@
 	.add-room input {
 		flex: 1;
 		min-width: 0;
+	}
+
+	/* Heutige Stunden aus dem Wochenplan: Zeit groß, Raum klein darunter */
+	.slots {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+		gap: 6px;
+	}
+
+	.drawer .slots button {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 4px 6px;
+		background: var(--surface);
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.slots small {
+		color: var(--muted);
+		font-size: 0.72rem;
+		font-weight: 500;
+	}
+
+	.drawer .slots button.on {
+		border-color: var(--accent);
+		background: var(--accent);
+		color: var(--on-accent);
+	}
+
+	.drawer .slots button.on small {
+		color: inherit;
+	}
+
+	.lesson > .row {
+		width: 100%;
+		margin-top: 6px;
+	}
+
+	/* Wochenplan: Wochentage als Reiter, darunter je Stunde Beginn – Ende ✕ und Raum */
+	.days {
+		grid-template-columns: repeat(7, 1fr);
+	}
+
+	.drawer .days button.has:not(.on) {
+		color: var(--text);
+	}
+
+	.slot {
+		display: grid;
+		grid-template-columns: 1fr auto 1fr auto;
+		align-items: center;
+		gap: 4px 6px;
+		padding-bottom: 8px;
+		border-bottom: 1px solid var(--border);
+		color: var(--muted);
+	}
+
+	.slot input {
+		min-width: 0;
+	}
+
+	.slot select {
+		grid-column: 2 / -1;
+		padding: 5px 8px;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: var(--surface);
+		color: var(--text);
+		font: inherit;
+	}
+
+	.slot .door {
+		display: flex;
+		justify-self: end;
+	}
+
+	.drawer .slot .remove {
+		display: grid;
+		place-items: center;
+		width: 22px;
+		height: 22px;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: var(--muted);
+	}
+
+	.drawer .slot .remove:hover {
+		color: var(--danger);
 	}
 
 	.hint {

@@ -70,7 +70,43 @@ CREATE TABLE IF NOT EXISTS backgrounds (
 	student_id INTEGER REFERENCES students(id) ON DELETE CASCADE,
 	created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+-- Welche Lehrkraft welche Schüler hat (ein Schüler kann mehrere haben), mit „zuletzt abgehakt“ je Lehrkraft.
+CREATE TABLE IF NOT EXISTS student_teachers (
+	student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+	teacher_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	last_check_lesson INTEGER,
+	last_check_self INTEGER,
+	PRIMARY KEY (student_id, teacher_id)
+);
+CREATE INDEX IF NOT EXISTS student_teachers_teacher ON student_teachers(teacher_id);
+-- Einstellungen pro Lehrkraft (Stunde, Räume, Wochenplan, Ampel, Test, Hintergrund).
+CREATE TABLE IF NOT EXISTS teacher_settings (
+	teacher_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	key TEXT NOT NULL,
+	value TEXT NOT NULL,
+	PRIMARY KEY (teacher_id, key)
+);
+CREATE TABLE IF NOT EXISTS assignments (
+	teacher_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+	title TEXT NOT NULL DEFAULT '',
+	body TEXT NOT NULL DEFAULT '',
+	images TEXT NOT NULL DEFAULT '[]',
+	format TEXT NOT NULL DEFAULT 'html',
+	updated_at TEXT
+);
 `;
+
+/**
+ * Spalte nachrüsten, falls sie fehlt.
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} table
+ * @param {string} column
+ * @param {string} definition
+ */
+function addColumn(db, table, column, definition) {
+	const columns = /** @type {{ name: string }[]} */ (db.prepare(`PRAGMA table_info(${table})`).all());
+	if (!columns.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
 
 /** @param {import('better-sqlite3').Database} db */
 function migrate(db) {
@@ -110,6 +146,56 @@ function migrate(db) {
 	if (!assignmentColumns.some((c) => c.name === 'format')) {
 		db.exec("ALTER TABLE assignment ADD COLUMN format TEXT NOT NULL DEFAULT 'markdown'");
 	}
+
+	// Mehrere Lehrkräfte: Admin, „sieht alle Schüler“ und die Lehrkraft, der Ziele, Gruppen und Bilder gehören.
+	addColumn(db, 'users', 'is_admin', 'INTEGER NOT NULL DEFAULT 0');
+	addColumn(db, 'users', 'sees_all', 'INTEGER NOT NULL DEFAULT 0');
+	addColumn(db, 'goals', 'teacher_id', 'INTEGER REFERENCES users(id) ON DELETE CASCADE');
+	addColumn(db, 'student_groups', 'teacher_id', 'INTEGER REFERENCES users(id) ON DELETE CASCADE');
+	addColumn(db, 'backgrounds', 'teacher_id', 'INTEGER REFERENCES users(id) ON DELETE CASCADE');
+	db.exec('CREATE INDEX IF NOT EXISTS goals_teacher_kind ON goals(teacher_id, kind)');
+}
+
+/**
+ * Alles ohne Lehrkraft dem Admin geben: beim Update von einer Version mit nur einer gemeinsamen Klasse
+ * (Schüler, Ziele, Gruppen, Bilder, Auftrag) und wenn eine Lehrkraft gelöscht wurde (ihre Schüler).
+ * Die früher gemeinsamen Einstellungen bekommt beim Update jede Lehrkraft als Kopie.
+ */
+export function claimOrphans() {
+	const db = getDb();
+	let admin = /** @type {{ id: number } | undefined} */ (
+		db.prepare("SELECT id FROM users WHERE role = 'teacher' AND is_admin = 1 ORDER BY id LIMIT 1").get()
+	);
+	if (!admin) {
+		admin = /** @type {{ id: number } | undefined} */ (
+			db.prepare("SELECT id FROM users WHERE role = 'teacher' ORDER BY id LIMIT 1").get()
+		);
+		if (!admin) return;
+		db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(admin.id);
+	}
+	const id = admin.id;
+	db.transaction(() => {
+		db.prepare(
+			`INSERT INTO student_teachers (student_id, teacher_id)
+			 SELECT s.id, ? FROM students s WHERE NOT EXISTS (SELECT 1 FROM student_teachers st WHERE st.student_id = s.id)`
+		).run(id);
+		db.prepare('UPDATE goals SET teacher_id = ? WHERE teacher_id IS NULL').run(id);
+		db.prepare('UPDATE student_groups SET teacher_id = ? WHERE teacher_id IS NULL').run(id);
+		db.prepare('UPDATE backgrounds SET teacher_id = ? WHERE teacher_id IS NULL AND student_id IS NULL').run(id);
+		db.prepare(
+			`INSERT OR IGNORE INTO assignments (teacher_id, title, body, images, format, updated_at)
+			 SELECT ?, title, body, images, format, updated_at FROM assignment WHERE id = 1`
+		).run(id);
+		db.prepare('DELETE FROM assignment').run();
+		if (!db.prepare("SELECT 1 FROM settings WHERE key = 'migrated.teacherSettings'").get()) {
+			db.prepare(
+				`INSERT OR IGNORE INTO teacher_settings (teacher_id, key, value)
+				 SELECT u.id, s.key, s.value FROM users u, settings s WHERE u.role = 'teacher'`
+			).run();
+			db.prepare('DELETE FROM settings').run();
+			db.prepare("INSERT INTO settings (key, value) VALUES ('migrated.teacherSettings', '1')").run();
+		}
+	})();
 }
 
 /** Selbstlern-Ziele bleiben, Stundenziele werden mit „Neue Stunde“ geleert. */
@@ -196,24 +282,56 @@ export function listUsernames() {
 	);
 }
 
-// --- Einstellungen: .env liefert die Standardwerte, gespeicherte Werte überschreiben sie ---
+// --- Einstellungen pro Lehrkraft: .env liefert die Standardwerte, gespeicherte Werte überschreiben sie ---
 
-export function getSettings() {
-	const { defaults } = getConfig();
+/**
+ * @param {number} owner Lehrkraft
+ * @param {string[]} keys
+ * @returns {Record<string, string>}
+ */
+export function readSettings(owner, keys) {
 	const rows = /** @type {{ key: string, value: string }[]} */ (
-		getDb().prepare('SELECT key, value FROM settings').all()
+		getDb()
+			.prepare(`SELECT key, value FROM teacher_settings WHERE teacher_id = ? AND key IN (${keys.map(() => '?').join(', ')})`)
+			.all(owner, ...keys)
 	);
-	const stored = Object.fromEntries(rows.filter((r) => r.key in defaults).map((r) => [r.key, r.value]));
+	return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+}
+
+/** @param {number} owner @param {Record<string, string>} entries */
+export function writeSettings(owner, entries) {
+	const db = getDb();
+	const upsert = db.prepare(
+		`INSERT INTO teacher_settings (teacher_id, key, value) VALUES (?, ?, ?)
+		 ON CONFLICT(teacher_id, key) DO UPDATE SET value = excluded.value`
+	);
+	db.transaction(() => {
+		for (const [key, value] of Object.entries(entries)) upsert.run(owner, key, value);
+	})();
+}
+
+/** @param {number} owner @param {string[]} keys */
+function deleteSettings(owner, keys) {
+	getDb()
+		.prepare(`DELETE FROM teacher_settings WHERE teacher_id = ? AND key IN (${keys.map(() => '?').join(', ')})`)
+		.run(owner, ...keys);
+}
+
+/** @param {number} owner */
+export function getSettings(owner) {
+	const { defaults } = getConfig();
+	const stored = readSettings(owner, Object.keys(defaults));
 	const roomChange = 'roomChange' in stored ? stored.roomChange === '1' : defaults.roomChange;
 	return { ...defaults, ...stored, roomChange };
 }
 
 /**
  * Raum und Raumwechsel sind optional – fehlen sie, bleiben die bisherigen Werte.
+ * @param {number} owner
  * @param {Record<string, unknown>} input
  */
-export function saveSettings(input) {
-	const current = getSettings();
+export function saveSettings(owner, input) {
+	const current = getSettings(owner);
 	const roomChange = input.roomChange === undefined ? current.roomChange : input.roomChange === true;
 	const roomInput = typeof input.roomName === 'string' ? input.roomName.trim() : '';
 	const settings = {
@@ -226,66 +344,99 @@ export function saveSettings(input) {
 	// Aufräumen ab … min vor Schluss: optional, sonst bleibt der bisherige Wert.
 	const warnMinutes = input.warnMinutes === undefined ? null : Math.round(Number(input.warnMinutes));
 	if (warnMinutes !== null && !(warnMinutes >= 0 && warnMinutes <= 60)) error(400, 'Aufräumen: 0 bis 60 Minuten');
-	const upsert = getDb().prepare(
-		'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
-	);
-	getDb().transaction(() => {
-		for (const [key, value] of Object.entries(settings)) upsert.run(key, typeof value === 'boolean' ? (value ? '1' : '0') : value);
-		if (warnMinutes !== null) upsert.run('warnMinutes', String(warnMinutes));
-	})();
+	writeSettings(owner, {
+		...Object.fromEntries(
+			Object.entries(settings).map(([key, value]) => [key, typeof value === 'boolean' ? (value ? '1' : '0') : value])
+		),
+		...(warnMinutes !== null && { warnMinutes: String(warnMinutes) }),
+		// Schüler mit mehreren Lehrkräften sehen die Lehrkraft, die zuletzt eine Stunde gestartet hat.
+		...(settings.startTime && settings.startTime !== current.startTime && { lessonStartedAt: String(Date.now()) })
+	});
 	return settings;
 }
 
-/** Räume zur Auswahl im Menü; ohne gespeicherte Liste der aktuelle Raum. @returns {string[]} */
-export function getRooms() {
-	const row = /** @type {{ value: string } | undefined} */ (
-		getDb().prepare("SELECT value FROM settings WHERE key = 'rooms'").get()
-	);
-	if (!row) return [getSettings().roomName];
+/**
+ * @param {string | undefined} json
+ * @returns {unknown[] | null}
+ */
+function parseList(json) {
+	if (json === undefined) return null;
 	try {
-		const list = JSON.parse(row.value);
-		return Array.isArray(list) ? list.filter((v) => typeof v === 'string') : [];
+		const list = JSON.parse(json);
+		return Array.isArray(list) ? list : [];
 	} catch {
 		return [];
 	}
 }
 
-/** @param {unknown} input Liste der Räume (doppelte und leere fallen weg, höchstens 20) */
-export function saveRooms(input) {
+/** Räume zur Auswahl im Menü; ohne gespeicherte Liste der aktuelle Raum. @param {number} owner @returns {string[]} */
+export function getRooms(owner) {
+	const list = parseList(readSettings(owner, ['rooms']).rooms);
+	if (!list) return [getSettings(owner).roomName];
+	return /** @type {string[]} */ (list.filter((v) => typeof v === 'string'));
+}
+
+/** @param {number} owner @param {unknown} input Liste der Räume (doppelte und leere fallen weg, höchstens 20) */
+export function saveRooms(owner, input) {
 	if (!Array.isArray(input)) error(400, 'Keine Raumliste angegeben');
 	const list = [
 		...new Set(input.map((v) => (typeof v === 'string' ? v.trim().slice(0, 60) : '')).filter(Boolean))
 	].slice(0, 20);
-	getDb()
-		.prepare("INSERT INTO settings (key, value) VALUES ('rooms', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
-		.run(JSON.stringify(list));
+	writeSettings(owner, { rooms: JSON.stringify(list) });
 	return list;
 }
 
-/** Aufräumen ab … min vor Schluss: im Menü gespeichert, sonst WARN_MINUTES aus der .env. */
-export function getWarnMinutes() {
-	const row = /** @type {{ value: string } | undefined} */ (
-		getDb().prepare("SELECT value FROM settings WHERE key = 'warnMinutes'").get()
-	);
-	return row ? Number(row.value) : getConfig().warnMinutes;
+/**
+ * Wochenplan: geplante Stunden pro Wochentag (0 = Montag).
+ * @param {number} owner
+ * @returns {import('#lib/schedule.js').Slot[]}
+ */
+export function getSchedule(owner) {
+	return /** @type {import('#lib/schedule.js').Slot[]} */ (parseList(readSettings(owner, ['schedule']).schedule) ?? []);
 }
 
-export function resetSettings() {
-	getDb().prepare("DELETE FROM settings WHERE key IN ('startTime', 'returnTime')").run();
-	return getSettings();
+/** @param {number} owner @param {unknown} input Liste der Stunden (höchstens 100), sortiert nach Tag und Beginn gespeichert */
+export function saveSchedule(owner, input) {
+	if (!Array.isArray(input)) error(400, 'Kein Wochenplan angegeben');
+	if (input.length > 100) error(400, 'Höchstens 100 Stunden im Wochenplan');
+	const list = input.map((slot) => {
+		const day = Number(slot?.day);
+		if (!Number.isInteger(day) || day < 0 || day > 6) error(400, 'Ungültiger Wochentag');
+		const start = optionalTime(slot.start, 'Beginn').slice(0, 5);
+		const end = optionalTime(slot.end, 'Ende').slice(0, 5);
+		if (!start || !end) error(400, 'Jede Stunde braucht Beginn und Ende');
+		if (start === end) error(400, 'Beginn und Ende sind gleich');
+		const room = typeof slot.room === 'string' ? slot.room.trim().slice(0, 60) : '';
+		return { day, start, end, room };
+	});
+	list.sort((a, b) => a.day - b.day || a.start.localeCompare(b.start));
+	writeSettings(owner, { schedule: JSON.stringify(list) });
+	return list;
+}
+
+/** Aufräumen ab … min vor Schluss: im Menü gespeichert, sonst WARN_MINUTES aus der .env. @param {number} owner */
+export function getWarnMinutes(owner) {
+	const { warnMinutes } = readSettings(owner, ['warnMinutes']);
+	return warnMinutes === undefined ? getConfig().warnMinutes : Number(warnMinutes);
+}
+
+/** @param {number} owner */
+export function resetSettings(owner) {
+	deleteSettings(owner, ['startTime', 'returnTime']);
+	return getSettings(owner);
 }
 
 // --- Lautstärke-Ampel: .env liefert die Standardwerte, gespeicherte Werte überschreiben sie ---
 
 /** @typedef {{ enabled: boolean, sensitivity: number, yellow: number, red: number }} NoiseSettings */
 
-/** @returns {NoiseSettings} */
-export function getNoiseSettings() {
+const NOISE_KEYS = ['enabled', 'sensitivity', 'yellow', 'red'];
+
+/** @param {number} owner @returns {NoiseSettings} */
+export function getNoiseSettings(owner) {
 	const defaults = getConfig().noise;
-	const rows = /** @type {{ key: string, value: string }[]} */ (
-		getDb().prepare("SELECT key, value FROM settings WHERE key LIKE 'noise.%'").all()
-	);
-	const stored = Object.fromEntries(rows.map((r) => [r.key.slice('noise.'.length), r.value]));
+	const rows = readSettings(owner, NOISE_KEYS.map((k) => `noise.${k}`));
+	const stored = Object.fromEntries(Object.entries(rows).map(([key, value]) => [key.slice('noise.'.length), value]));
 	return {
 		enabled: stored.enabled === undefined ? defaults.enabled : stored.enabled === '1',
 		sensitivity: stored.sensitivity === undefined ? defaults.sensitivity : Number(stored.sensitivity),
@@ -294,8 +445,8 @@ export function getNoiseSettings() {
 	};
 }
 
-/** @param {Record<string, unknown>} input */
-export function saveNoiseSettings(input) {
+/** @param {number} owner @param {Record<string, unknown>} input */
+export function saveNoiseSettings(owner, input) {
 	/**
 	 * @param {unknown} value
 	 * @param {string} field
@@ -314,51 +465,40 @@ export function saveNoiseSettings(input) {
 		red: int(input.red, 'Rot', 2, 100)
 	};
 	if (settings.red <= settings.yellow) error(400, 'Rot muss höher liegen als Gelb');
-	const upsert = getDb().prepare(
-		'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
-	);
-	getDb().transaction(() => {
-		upsert.run('noise.enabled', settings.enabled ? '1' : '0');
-		upsert.run('noise.sensitivity', String(settings.sensitivity));
-		upsert.run('noise.yellow', String(settings.yellow));
-		upsert.run('noise.red', String(settings.red));
-	})();
+	writeSettings(owner, {
+		'noise.enabled': settings.enabled ? '1' : '0',
+		'noise.sensitivity': String(settings.sensitivity),
+		'noise.yellow': String(settings.yellow),
+		'noise.red': String(settings.red)
+	});
 	return settings;
 }
 
-// --- Test-Modus: Start und Ende als Zeitstempel (ms), ebenfalls in der settings-Tabelle ---
+// --- Test-Modus: Start und Ende als Zeitstempel (ms), ebenfalls bei den Einstellungen der Lehrkraft ---
 
 /** @typedef {{ start: number, end: number }} TestTimer */
 
-/** @returns {TestTimer | null} */
-export function getTest() {
-	const rows = /** @type {{ key: string, value: string }[]} */ (
-		getDb().prepare("SELECT key, value FROM settings WHERE key IN ('test.start', 'test.end')").all()
-	);
-	const map = Object.fromEntries(rows.map((r) => [r.key, Number(r.value)]));
-	const start = map['test.start'];
-	const end = map['test.end'];
+/** @param {number} owner @returns {TestTimer | null} */
+export function getTest(owner) {
+	const map = readSettings(owner, ['test.start', 'test.end']);
+	const start = Number(map['test.start'] ?? NaN);
+	const end = Number(map['test.end'] ?? NaN);
 	return Number.isFinite(start) && Number.isFinite(end) ? { start, end } : null;
 }
 
-/** @param {Record<string, unknown>} input */
-export function saveTest(input) {
+/** @param {number} owner @param {Record<string, unknown>} input */
+export function saveTest(owner, input) {
 	const start = Number(input.start);
 	const end = Number(input.end);
 	if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) error(400, 'Ungültige Testzeit');
 	if (end - start > 8 * 3_600_000) error(400, 'Ein Test darf höchstens 8 Stunden dauern');
-	const upsert = getDb().prepare(
-		'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
-	);
-	getDb().transaction(() => {
-		upsert.run('test.start', String(Math.round(start)));
-		upsert.run('test.end', String(Math.round(end)));
-	})();
-	return getTest();
+	writeSettings(owner, { 'test.start': String(Math.round(start)), 'test.end': String(Math.round(end)) });
+	return getTest(owner);
 }
 
-export function clearTest() {
-	getDb().prepare("DELETE FROM settings WHERE key IN ('test.start', 'test.end')").run();
+/** @param {number} owner */
+export function clearTest(owner) {
+	deleteSettings(owner, ['test.start', 'test.end']);
 }
 
 // --- Schüler & Ziele ---
@@ -369,39 +509,63 @@ export function clearTest() {
  * @typedef {{ id: number, firstName: string, lastName: string, username: string | null, goals: Goal[], activeAt: number | null }} Student
  */
 /** @typedef {{ username: string, password: string }} Credentials */
+/**
+ * Wessen Daten gelten (`owner`: Lehrkraft) und ob alle Schüler sichtbar sind oder nur die eigenen.
+ * @typedef {{ owner: number, all: boolean }} Scope
+ */
 
-/** Anzahl Schüler und Lehrkräfte – für die Zahlen im Menü. */
-export function countPeople() {
+/**
+ * Darf diese Lehrkraft den Schüler sehen (eigener Schüler oder „sieht alle“)?
+ * @param {Scope} scope
+ * @param {number} studentId
+ */
+export function canSeeStudent(scope, studentId) {
 	const db = getDb();
-	const count = (/** @type {string} */ sql) => /** @type {{ n: number }} */ (db.prepare(sql).get()).n;
+	if (scope.all) return !!db.prepare('SELECT 1 FROM students WHERE id = ?').get(studentId);
+	return !!db.prepare('SELECT 1 FROM student_teachers WHERE student_id = ? AND teacher_id = ?').get(studentId, scope.owner);
+}
+
+/** Anzahl sichtbarer Schüler und aller Lehrkräfte – für die Zahlen im Menü. @param {Scope} scope */
+export function countPeople(scope) {
+	const db = getDb();
+	const count = (/** @type {string} */ sql, /** @type {unknown[]} */ ...params) =>
+		/** @type {{ n: number }} */ (db.prepare(sql).get(...params)).n;
 	return {
-		students: count('SELECT COUNT(*) AS n FROM students'),
+		students: scope.all
+			? count('SELECT COUNT(*) AS n FROM students')
+			: count('SELECT COUNT(*) AS n FROM student_teachers WHERE teacher_id = ?', scope.owner),
 		teachers: count("SELECT COUNT(*) AS n FROM users WHERE role = 'teacher'")
 	};
 }
 
 /**
+ * Sichtbare Schüler mit den Zielen dieser Lehrkraft.
+ * @param {Scope} scope
  * @param {'self' | 'lesson'} [kind] Welche Ziele mitgeladen werden
  * @returns {Student[]}
  */
-export function listStudents(kind = 'self') {
+export function listStudents(scope, kind = 'self') {
 	const db = getDb();
-	const lastCheck = goalKind(kind) === 'lesson' ? 's.last_check_lesson' : 's.last_check_self';
+	const lastCheck = goalKind(kind) === 'lesson' ? 'st.last_check_lesson' : 'st.last_check_self';
 	const students = /** @type {(Omit<Student, 'goals' | 'activeAt'> & { lastCheck: number | null })[]} */ (
 		db
 			.prepare(
 				`SELECT s.id, s.first_name AS firstName, s.last_name AS lastName, u.username, ${lastCheck} AS lastCheck
-				 FROM students s LEFT JOIN users u ON u.student_id = s.id
+				 FROM students s
+				 LEFT JOIN users u ON u.student_id = s.id
+				 LEFT JOIN student_teachers st ON st.student_id = s.id AND st.teacher_id = ?
+				 WHERE ? OR st.teacher_id IS NOT NULL
 				 ORDER BY s.last_name COLLATE NOCASE, s.first_name COLLATE NOCASE`
 			)
-			.all()
+			.all(scope.owner, scope.all ? 1 : 0)
 	);
 	const goals = /** @type {{ id: number, studentId: number, text: string, done: number, createdAt: number | null }[]} */ (
 		db
 			.prepare(
-				'SELECT id, student_id AS studentId, text, done, created_at AS createdAt FROM goals WHERE kind = ? ORDER BY position, id'
+				`SELECT id, student_id AS studentId, text, done, created_at AS createdAt FROM goals
+				 WHERE kind = ? AND teacher_id = ? ORDER BY position, id`
 			)
-			.all(kind)
+			.all(kind, scope.owner)
 	);
 	/** @type {Map<number, Student>} */
 	const byId = new Map(students.map(({ lastCheck, ...s }) => [s.id, { ...s, goals: [], activeAt: lastCheck }]));
@@ -419,12 +583,46 @@ export function listStudents(kind = 'self') {
 	return [...byId.values()];
 }
 
+/** Lehrkräfte je Schüler (für den Admin in „Schüler verwalten“). @returns {Record<number, number[]>} */
+export function studentTeacherIds() {
+	const rows = /** @type {{ studentId: number, teacherId: number }[]} */ (
+		getDb().prepare('SELECT student_id AS studentId, teacher_id AS teacherId FROM student_teachers').all()
+	);
+	/** @type {Record<number, number[]>} */
+	const map = {};
+	for (const r of rows) (map[r.studentId] ??= []).push(r.teacherId);
+	return map;
+}
+
 /**
- * Legt den Schüler samt Login an. Das Klartext-Passwort wird nur hier einmal zurückgegeben.
+ * Lehrkräfte eines Schülers festlegen (nur Admin). Mindestens eine.
+ * @param {number} studentId
+ * @param {unknown} input
+ */
+export function setStudentTeachers(studentId, input) {
+	if (!Array.isArray(input)) error(400, 'Keine Lehrkräfte angegeben');
+	const db = getDb();
+	const teachers = /** @type {{ id: number }[]} */ (db.prepare("SELECT id FROM users WHERE role = 'teacher'").all());
+	const ids = teachers.map((t) => t.id).filter((id) => input.includes(id));
+	if (ids.length === 0) error(400, 'Jeder Schüler braucht mindestens eine Lehrkraft');
+	db.transaction(() => {
+		db.prepare(`DELETE FROM student_teachers WHERE student_id = ? AND teacher_id NOT IN (${ids.map(() => '?').join(', ')})`).run(
+			studentId,
+			...ids
+		);
+		const link = db.prepare('INSERT OR IGNORE INTO student_teachers (student_id, teacher_id) VALUES (?, ?)');
+		for (const id of ids) link.run(studentId, id);
+	})();
+	return ids;
+}
+
+/**
+ * Legt den Schüler samt Login an und gibt ihn der Lehrkraft. Das Klartext-Passwort wird nur hier einmal zurückgegeben.
+ * @param {number} owner
  * @param {Record<string, unknown>} input
  * @returns {{ student: Student, credentials: Credentials }}
  */
-export function addStudent(input) {
+export function addStudent(owner, input) {
 	const firstName = requiredText(input.firstName, 'Vorname', 60);
 	const lastName = requiredText(input.lastName, 'Nachname', 60);
 	const wanted = typeof input.username === 'string' && input.username.trim() ? normalizeUsername(input.username) : null;
@@ -435,6 +633,7 @@ export function addStudent(input) {
 		const id = Number(
 			db.prepare('INSERT INTO students (first_name, last_name) VALUES (?, ?)').run(firstName, lastName).lastInsertRowid
 		);
+		db.prepare('INSERT INTO student_teachers (student_id, teacher_id) VALUES (?, ?)').run(id, owner);
 		const username = wanted ?? suggestUsername(firstName, lastName);
 		const password = generatePassword();
 		db.prepare("INSERT INTO users (username, password_hash, role, student_id) VALUES (?, ?, 'student', ?)").run(
@@ -506,23 +705,45 @@ export function updateStudent(id, input) {
 	return { id, firstName, lastName };
 }
 
-/** @param {number} id */
-export function deleteStudent(id) {
-	const { changes } = getDb().prepare('DELETE FROM students WHERE id = ?').run(id);
+/**
+ * Hat der Schüler noch andere Lehrkräfte und sieht diese Lehrkraft nicht alle, wird er nur aus ihrer
+ * Klasse entfernt (samt ihren Zielen). Sonst wird er ganz gelöscht.
+ * @param {Scope} scope
+ * @param {number} id
+ * @returns {{ removed: 'class' | 'student' }}
+ */
+export function deleteStudent(scope, id) {
+	const db = getDb();
+	const others = /** @type {{ n: number }} */ (
+		db.prepare('SELECT COUNT(*) AS n FROM student_teachers WHERE student_id = ? AND teacher_id != ?').get(id, scope.owner)
+	).n;
+	if (!scope.all && others > 0) {
+		db.transaction(() => {
+			db.prepare('DELETE FROM student_teachers WHERE student_id = ? AND teacher_id = ?').run(id, scope.owner);
+			db.prepare('DELETE FROM goals WHERE student_id = ? AND teacher_id = ?').run(id, scope.owner);
+		})();
+		return { removed: 'class' };
+	}
+	const { changes } = db.prepare('DELETE FROM students WHERE id = ?').run(id);
 	if (!changes) error(404, 'Schüler nicht gefunden');
+	return { removed: 'student' };
 }
 
 /** @typedef {{ done: number, total: number }} GoalCount */
 
 /**
- * Erledigte/alle Ziele pro Schüler, getrennt nach Stundenzielen und Selbstlernen.
+ * Erledigte/alle Ziele dieser Lehrkraft pro Schüler, getrennt nach Stundenzielen und Selbstlernen.
+ * @param {number} owner
  * @returns {Record<number, { lesson: GoalCount, self: GoalCount }>}
  */
-export function goalStats() {
+export function goalStats(owner) {
 	const rows = /** @type {{ studentId: number, kind: 'self' | 'lesson', total: number, done: number }[]} */ (
 		getDb()
-			.prepare('SELECT student_id AS studentId, kind, COUNT(*) AS total, SUM(done) AS done FROM goals GROUP BY student_id, kind')
-			.all()
+			.prepare(
+				`SELECT student_id AS studentId, kind, COUNT(*) AS total, SUM(done) AS done FROM goals
+				 WHERE teacher_id = ? GROUP BY student_id, kind`
+			)
+			.all(owner)
 	);
 	/** @type {Record<number, { lesson: GoalCount, self: GoalCount }>} */
 	const stats = {};
@@ -534,65 +755,70 @@ export function goalStats() {
 }
 
 /** @param {number} goalId */
-export function getGoalStudentId(goalId) {
-	const row = /** @type {{ studentId: number } | undefined} */ (
-		getDb().prepare('SELECT student_id AS studentId FROM goals WHERE id = ?').get(goalId)
+export function getGoalOwner(goalId) {
+	const row = /** @type {{ studentId: number, teacherId: number } | undefined} */ (
+		getDb().prepare('SELECT student_id AS studentId, teacher_id AS teacherId FROM goals WHERE id = ?').get(goalId)
 	);
 	if (!row) error(404, 'Ziel nicht gefunden');
-	return row.studentId;
+	return row;
 }
 
 /**
+ * @param {number} owner Lehrkraft, zu der das Ziel gehört
  * @param {number} studentId
  * @param {Record<string, unknown>} input
  * @returns {Goal}
  */
-export function addGoal(studentId, input) {
+export function addGoal(owner, studentId, input) {
 	const text = requiredText(input.text, 'Ziel', 200);
 	const kind = goalKind(input.kind);
 	const db = getDb();
 	if (!db.prepare('SELECT 1 FROM students WHERE id = ?').get(studentId)) error(404, 'Schüler nicht gefunden');
 	const { lastInsertRowid } = db
 		.prepare(
-			`INSERT INTO goals (student_id, text, kind, position, created_at)
-			 VALUES (?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM goals WHERE student_id = ?), ?)`
+			`INSERT INTO goals (student_id, teacher_id, text, kind, position, created_at)
+			 VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM goals WHERE student_id = ? AND teacher_id = ?), ?)`
 		)
-		.run(studentId, text, kind, studentId, Date.now());
+		.run(studentId, owner, text, kind, studentId, owner, Date.now());
 	return { id: Number(lastInsertRowid), text, done: false };
 }
 
 /**
- * Dieselben Ziele allen Schülern geben (z. B. die Schritte des Auftrags als Stundenziele).
+ * Dieselben Ziele allen sichtbaren Schülern geben (z. B. die Schritte des Auftrags als Stundenziele).
  * Ziele, die ein Schüler mit gleichem Text schon hat, werden übersprungen.
+ * @param {Scope} scope
  * @param {unknown} texts
  * @param {unknown} kind
  * @param {boolean} [replace] vorher alle Ziele dieser Art löschen (bei den gewählten Schülern)
  * @param {number[] | null} [studentIds] nur diese Schüler, sonst alle
  */
-export function addGoalsToAll(texts, kind, replace = false, studentIds = null) {
+export function addGoalsToAll(scope, texts, kind, replace = false, studentIds = null) {
 	if (!Array.isArray(texts) || texts.length === 0 || texts.length > 30) error(400, 'Keine Ziele angegeben');
 	const list = [...new Set(texts.map((t) => requiredText(t, 'Ziel', 200)))];
 	const k = goalKind(kind);
 	const db = getDb();
-	const all = /** @type {{ id: number }[]} */ (db.prepare('SELECT id FROM students').all());
+	const all = listStudents(scope).map((s) => ({ id: s.id }));
 	// Nur ausgewählte Schüler („Einzelne…“) – unbekannte IDs fallen weg.
 	const students = Array.isArray(studentIds) ? all.filter((s) => studentIds.includes(s.id)) : all;
 	if (students.length === 0) error(400, 'Keine Schüler ausgewählt');
-	const exists = db.prepare('SELECT 1 FROM goals WHERE student_id = ? AND kind = ? AND text = ?');
+	const exists = db.prepare('SELECT 1 FROM goals WHERE student_id = ? AND teacher_id = ? AND kind = ? AND text = ?');
 	/** @type {number[]} */
 	const goalIds = [];
 	db.transaction(() => {
-		if (replace && students.length === all.length) clearGoals(k);
+		if (replace && students.length === all.length) clearGoals(scope.owner, k);
 		else if (replace) {
 			for (const { id } of students) {
-				db.prepare('DELETE FROM goals WHERE student_id = ? AND kind = ?').run(id, k);
-				db.prepare(`UPDATE students SET last_check_${k} = NULL WHERE id = ?`).run(id);
+				db.prepare('DELETE FROM goals WHERE student_id = ? AND teacher_id = ? AND kind = ?').run(id, scope.owner, k);
+				db.prepare(`UPDATE student_teachers SET last_check_${k} = NULL WHERE student_id = ? AND teacher_id = ?`).run(
+					id,
+					scope.owner
+				);
 			}
 		}
 		for (const { id } of students) {
 			for (const text of list) {
-				if (exists.get(id, k, text)) continue;
-				goalIds.push(addGoal(id, { text, kind: k }).id);
+				if (exists.get(id, scope.owner, k, text)) continue;
+				goalIds.push(addGoal(scope.owner, id, { text, kind: k }).id);
 			}
 		}
 	})();
@@ -600,31 +826,33 @@ export function addGoalsToAll(texts, kind, replace = false, studentIds = null) {
 }
 
 /**
- * Mehrere Ziele auf einmal löschen („Rückgängig“ nach dem Senden).
+ * Mehrere eigene Ziele auf einmal löschen („Rückgängig“ nach dem Senden).
+ * @param {number} owner
  * @param {unknown} ids
  */
-export function deleteGoals(ids) {
+export function deleteGoals(owner, ids) {
 	if (!Array.isArray(ids) || ids.some((id) => !Number.isInteger(id))) error(400, 'Ungültige Ziele');
 	const db = getDb();
-	const del = db.prepare('DELETE FROM goals WHERE id = ?');
+	const del = db.prepare('DELETE FROM goals WHERE id = ? AND teacher_id = ?');
 	let deleted = 0;
 	db.transaction(() => {
-		for (const id of ids) deleted += del.run(id).changes;
+		for (const id of ids) deleted += del.run(id, owner).changes;
 	})();
 	return { deleted };
 }
 
 /**
- * Alle Ziele einer Art löschen (z. B. Stundenziele für eine neue Stunde).
+ * Alle eigenen Ziele einer Art löschen (z. B. Stundenziele für eine neue Stunde).
+ * @param {number} owner
  * @param {unknown} kind
  */
-export function clearGoals(kind) {
+export function clearGoals(owner, kind) {
 	const db = getDb();
 	const k = goalKind(kind);
 	const { changes } = db.transaction(() => {
 		// Neue Stunde → die Zeit seit dem letzten Abhaken beginnt neu.
-		db.prepare(`UPDATE students SET last_check_${k} = NULL`).run();
-		return db.prepare('DELETE FROM goals WHERE kind = ?').run(k);
+		db.prepare(`UPDATE student_teachers SET last_check_${k} = NULL WHERE teacher_id = ?`).run(owner);
+		return db.prepare('DELETE FROM goals WHERE kind = ? AND teacher_id = ?').run(k, owner);
 	})();
 	return { deleted: changes };
 }
@@ -636,18 +864,24 @@ export function clearGoals(kind) {
  */
 export function updateGoal(id, input) {
 	const db = getDb();
-	const current = /** @type {{ text: string, done: number, kind: string, studentId: number } | undefined} */ (
-		db.prepare('SELECT text, done, kind, student_id AS studentId FROM goals WHERE id = ?').get(id)
+	const current = /** @type {{ text: string, done: number, kind: string, studentId: number, teacherId: number } | undefined} */ (
+		db
+			.prepare('SELECT text, done, kind, student_id AS studentId, teacher_id AS teacherId FROM goals WHERE id = ?')
+			.get(id)
 	);
 	if (!current) error(404, 'Ziel nicht gefunden');
 	const text = input.text === undefined ? current.text : requiredText(input.text, 'Ziel', 200);
 	const done = input.done === undefined ? current.done === 1 : Boolean(input.done);
 	db.transaction(() => {
 		db.prepare('UPDATE goals SET text = ?, done = ? WHERE id = ?').run(text, done ? 1 : 0, id);
-		// Zeitpunkt des letzten Abhakens pro Schüler und Art merken.
+		// Zeitpunkt des letzten Abhakens pro Schüler, Lehrkraft und Art merken.
 		if (done && current.done !== 1) {
 			const column = current.kind === 'lesson' ? 'last_check_lesson' : 'last_check_self';
-			db.prepare(`UPDATE students SET ${column} = ? WHERE id = ?`).run(Date.now(), current.studentId);
+			db.prepare(`UPDATE student_teachers SET ${column} = ? WHERE student_id = ? AND teacher_id = ?`).run(
+				Date.now(),
+				current.studentId,
+				current.teacherId
+			);
 		}
 	})();
 	return { id, text, done };

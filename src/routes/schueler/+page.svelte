@@ -116,12 +116,28 @@
 	async function remove(student) {
 		const ok = await ask({
 			title: `${student.firstName} ${student.lastName} löschen?`,
-			message: 'Zugang und alle Ziele gehen dabei verloren.',
+			message: data.user?.isAdmin
+				? 'Zugang und alle Ziele gehen dabei verloren – auch bei den anderen Lehrkräften.'
+				: 'Zugang und alle Ziele gehen dabei verloren. Hat der Schüler noch eine andere Lehrkraft, wird er nur aus deiner Klasse entfernt.',
 			confirmLabel: 'Löschen',
 			danger: true
 		});
 		if (!ok) return;
 		run(() => api(`/api/students/${student.id}`, 'DELETE'));
+	}
+
+	// --- Admin: Lehrkräfte je Schüler (ein Schüler kann mehrere haben, mindestens eine) ---
+
+	const showTeachers = $derived(data.teachers.length > 1);
+
+	/**
+	 * @param {import('#lib/server/db.js').Student} student
+	 * @param {number} teacherId
+	 */
+	function toggleTeacher(student, teacherId) {
+		const current = data.studentTeachers[student.id] ?? [];
+		const teacherIds = current.includes(teacherId) ? current.filter((id) => id !== teacherId) : [...current, teacherId];
+		run(() => api(`/api/students/${student.id}`, 'PATCH', { teacherIds }));
 	}
 </script>
 
@@ -289,6 +305,26 @@
 								<Icon name="close" size={16} />
 							</button>
 						</div>
+						{#if showTeachers}
+							{@const own = data.studentTeachers[student.id] ?? []}
+							<div class="teachers" role="group" aria-label="Lehrkräfte von {student.firstName} {student.lastName}">
+								<span>Lehrkräfte:</span>
+								{#each data.teachers as teacher (teacher.id)}
+									{@const on = own.includes(teacher.id)}
+									<button
+										class="teacher"
+										class:on
+										aria-pressed={on}
+										disabled={on && own.length === 1}
+										title={on && own.length === 1 ? 'Jeder Schüler braucht mindestens eine Lehrkraft' : ''}
+										onclick={() => toggleTeacher(student, teacher.id)}
+									>
+										{#if on}<Icon name="check" size={12} />{/if}
+										{teacher.username}
+									</button>
+								{/each}
+							</div>
+						{/if}
 					</li>
 				{/if}
 			{/each}
@@ -402,8 +438,43 @@
 		text-align: center;
 	}
 
-	li:not(.editing) .row {
+	li:not(.editing) {
 		border-bottom: 1px solid var(--border);
+	}
+
+	/* Admin: Lehrkräfte als Umschalter unter dem Namen */
+	.teachers {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+		padding: 0 4px 8px;
+		color: var(--muted);
+		font-size: 0.82rem;
+	}
+
+	.teachers .teacher {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		padding: 2px 10px;
+		border-radius: 999px;
+		background: var(--surface);
+		color: var(--muted);
+		font-family: ui-monospace, monospace;
+		font-size: 0.8rem;
+	}
+
+	.teachers .teacher.on {
+		border-color: var(--accent);
+		background: var(--accent-soft);
+		color: var(--accent);
+		font-weight: 600;
+	}
+
+	.teachers .teacher:disabled {
+		cursor: not-allowed;
+		opacity: 1;
 	}
 
 	li.editing .row {

@@ -28,6 +28,9 @@
 		<path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
 	{:else if name === 'expand'}
 		<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3" />
+	{:else if name === 'calendar'}
+		<rect x="3" y="4" width="18" height="18" rx="2" />
+		<path d="M16 2v4M8 2v4M3 10h18" />
 	{:else if name === 'door'}
 		<path d="M13 4h3a2 2 0 0 1 2 2v14" />
 		<path d="M2 20h3" />
