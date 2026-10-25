@@ -63,9 +63,6 @@
 		const { start, end } = span;
 		return !!now && !!start && !!end && start <= now && now.getTime() < end.getTime() + 30 * 60000;
 	});
-	// Restzeit in Minuten (negativ = überzogen)
-	const left = $derived(span.end && clock.now ? Math.ceil((span.end.getTime() - clock.now.getTime()) / 60000) : 0);
-
 	const durations = $derived(/** @type {number[]} */ (page.data.lessonDurations ?? [45, 90]));
 	// Kurze Dauern plus die aus LESSON_DURATIONS (z. B. 15 · 30 · 45 · 90).
 	const chips = $derived([...new Set([15, 30, ...durations])].sort((a, b) => a - b));
@@ -89,6 +86,13 @@
 	const rooms = $derived(/** @type {string[]} */ (page.data.rooms ?? []));
 	const from = $derived(begin || hhmm(clock.now ?? new Date()));
 	const to = $derived(end || addMinutes(from, chosen));
+	// Minuten bis zum Ende laut Eingabe (ab jetzt bzw. ab Beginn, falls der noch kommt; negativ = überzogen).
+	const left = $derived.by(() => {
+		const now = clock.now ?? new Date();
+		const { start, end: stop } = lessonSpan(from, to, now);
+		if (!start || !stop) return 0;
+		return Math.ceil((stop.getTime() - Math.max(now.getTime(), start.getTime())) / 60000);
+	});
 	const warnChoices = $derived([...new Set([...WARN_CHOICES, warn])].sort((a, b) => a - b));
 
 	// Geschlossen → beim nächsten Öffnen wieder Hauptseite und Reiter „Zeit“.
@@ -262,7 +266,7 @@
 						<div class="summary">
 							<span class="kicker">{running ? (left >= 0 ? 'Noch' : 'Überzogen') : 'Nächste Stunde'}</span>
 							<strong class="big">
-								{running ? `${left >= 0 ? '' : '+'}${Math.abs(left)} min` : `${minutesBetween(from, to)} min`}
+								{running ? `${left >= 0 ? '' : '+'}${Math.abs(left)} min` : `${left > 0 ? left : minutesBetween(from, to)} min`}
 							</strong>
 							<span class="meta">
 								{from} – {to} ·

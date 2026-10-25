@@ -2,6 +2,11 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [0.3.4] – 2026-10-25
+
+### Behoben
+- **Minuten auf der Stunden-Karte im Menü:** Die große Zahl rechnet jetzt mit den eingegebenen Zeiten – bei eigenem Beginn, der schon vorbei ist, die Minuten bis zum Ende statt der ganzen Dauer; bei laufender Stunde sofort mit geändertem Ende bzw. +5/+10/+15 statt erst nach „Stunde aktualisieren“
+
 ## [0.3.3] – 2026-10-19
 
 ### Neu
@@ -152,6 +157,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.3.4]: https://github.com/seals187/classRoom/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/seals187/classRoom/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/seals187/classRoom/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/seals187/classRoom/compare/v0.3.0...v0.3.1
