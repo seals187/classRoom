@@ -8,6 +8,7 @@
 	import { dashesToSteps } from '#lib/steps.js';
 	import Icon from './Icon.svelte';
 	import GoalsFromAssignment from './GoalsFromAssignment.svelte';
+	import AssignmentTransfer from './AssignmentTransfer.svelte';
 
 	/**
 	 * @type {{
@@ -15,13 +16,16 @@
 	 *   canEdit: boolean,
 	 *   students?: { id: number, firstName: string, lastName: string }[],
 	 *   groups?: import('#lib/server/groups.js').Group[],
-	 *   progress?: Record<string, { done: number, total: number }>
+	 *   progress?: Record<string, { done: number, total: number }>,
+	 *   owners?: { id: number, username: string, title: string, hasAssignment: boolean }[]
 	 * }}
 	 */
-	let { assignment, canEdit, students = [], groups = [], progress = {} } = $props();
+	let { assignment, canEdit, students = [], groups = [], progress = {}, owners = [] } = $props();
 
 	// Fenster „Ziele aus dem Auftrag“
 	let goalsOpen = $state(false);
+	// „Weitergeben“ an eine andere Lehrkraft (nur wenn es mehrere gibt)
+	let transferOpen = $state(false);
 
 	// Kein Schwarz: Normaler Text passt sich dem Theme an, festes Schwarz wäre im Dunkelmodus unlesbar.
 	const COLORS = [
@@ -478,6 +482,16 @@
 						<Icon name="image" size={13} />+
 					</button>
 				{/if}
+				{#if canEdit && owners.length > 1}
+					<button
+						class="tool with-icon"
+						onclick={() => (transferOpen = true)}
+						title="An eine andere Lehrkraft kopieren oder übertragen"
+						aria-label="Auftrag weitergeben"
+					>
+						<Icon name="users" size={13} /> Weitergeben
+					</button>
+				{/if}
 				{#if canEdit}
 					<button class="tool" onclick={startEdit} title="Bearbeiten" aria-label="Bearbeiten"><Icon name="pencil" size={13} /></button>
 				{/if}
@@ -616,6 +630,7 @@
 
 {#if canEdit}
 	<GoalsFromAssignment bind:open={goalsOpen} steps={stepTexts} title={assignment.title} {students} {groups} />
+	{#if owners.length > 1}<AssignmentTransfer bind:open={transferOpen} {owners} />{/if}
 {/if}
 
 {#if zoomed}
@@ -722,7 +737,8 @@
 		border-color: var(--muted);
 	}
 
-	.tool.img-size {
+	.tool.img-size,
+	.tool.with-icon {
 		display: inline-flex;
 		gap: 2px;
 	}

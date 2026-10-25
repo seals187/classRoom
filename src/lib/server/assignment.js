@@ -69,6 +69,60 @@ export function deleteAssignment(owner) {
 	return getAssignment(owner);
 }
 
+/**
+ * Lehrkräfte mit dem Titel ihres Auftrags ('' = keiner) – zum Weitergeben.
+ * @returns {{ id: number, username: string, title: string, hasAssignment: boolean }[]}
+ */
+export function listAssignmentOwners() {
+	const rows = /** @type {{ id: number, username: string, title: string | null, body: string | null }[]} */ (
+		getDb()
+			.prepare(
+				`SELECT u.id, u.username, a.title, a.body FROM users u LEFT JOIN assignments a ON a.teacher_id = u.id
+				 WHERE u.role = 'teacher' ORDER BY u.username`
+			)
+			.all()
+	);
+	return rows.map((r) => ({
+		id: r.id,
+		username: r.username,
+		title: r.title ?? '',
+		hasAssignment: r.body !== null
+	}));
+}
+
+/**
+ * Auftrag einer Lehrkraft an eine andere kopieren oder übertragen (dann ist er bei der ersten weg).
+ * Hat die Ziel-Lehrkraft schon einen Auftrag, braucht es `replace`. Bilder werden geteilt, nicht verdoppelt.
+ * @param {number} from
+ * @param {number} to
+ * @param {unknown} mode 'copy' | 'move'
+ * @param {boolean} replace
+ */
+export function transferAssignment(from, to, mode, replace) {
+	if (mode !== 'copy' && mode !== 'move') error(400, 'Ungültige Art');
+	if (from === to) error(400, 'Bitte eine andere Lehrkraft wählen');
+	const db = getDb();
+	const isTeacher = db.prepare("SELECT 1 FROM users WHERE id = ? AND role = 'teacher'");
+	if (!isTeacher.get(from) || !isTeacher.get(to)) error(404, 'Lehrkraft nicht gefunden');
+	if (!db.prepare('SELECT 1 FROM assignments WHERE teacher_id = ?').get(from)) error(404, 'Diese Lehrkraft hat keinen Auftrag');
+	if (!replace && db.prepare('SELECT 1 FROM assignments WHERE teacher_id = ?').get(to)) {
+		error(409, 'Die Lehrkraft hat schon einen Auftrag – er würde ersetzt');
+	}
+	const old = getAssignment(to).images;
+	db.transaction(() => {
+		db.prepare(
+			`INSERT INTO assignments (teacher_id, title, body, images, format, updated_at)
+			 SELECT ?, title, body, images, format, CURRENT_TIMESTAMP FROM assignments WHERE teacher_id = ?
+			 ON CONFLICT(teacher_id) DO UPDATE SET title = excluded.title, body = excluded.body,
+			   images = excluded.images, format = excluded.format, updated_at = excluded.updated_at`
+		).run(to, from);
+		if (mode === 'move') db.prepare('DELETE FROM assignments WHERE teacher_id = ?').run(from);
+		// Bilder des ersetzten Auftrags aufräumen, sofern sonst niemand sie braucht.
+		deleteFilesIfUnused(old);
+	})();
+	return getAssignment(to);
+}
+
 /** Dateien, die noch ein Auftrag (Bildliste oder Text) oder ein Hintergrund braucht – über alle Lehrkräfte. */
 function usedFiles() {
 	const db = getDb();

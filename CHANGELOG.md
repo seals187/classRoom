@@ -2,6 +2,11 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [0.3.6] – 2026-10-25
+
+### Neu
+- **Auftrag weitergeben:** Neuer Knopf „Weitergeben“ beim Auftrag – an eine andere Lehrkraft **kopieren** (bleibt auch bei der eigenen) oder **übertragen** (geht ganz zur anderen Lehrkraft und deren Schülern). Hat die andere Lehrkraft schon einen Auftrag, sagt das Fenster deutlich, dass er ersetzt wird. Lehrkräfte geben ihren eigenen Auftrag weiter, der Admin auch den jeder anderen Lehrkraft (z. B. den nach dem Update übernommenen Auftrag an die richtige Lehrkraft)
+
 ## [0.3.5] – 2026-10-25
 
 ### Neu
@@ -173,6 +178,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.3.6]: https://github.com/seals187/classRoom/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/seals187/classRoom/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/seals187/classRoom/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/seals187/classRoom/compare/v0.3.2...v0.3.3
