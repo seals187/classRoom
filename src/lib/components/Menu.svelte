@@ -3,7 +3,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api.js';
-	import { formatClock, lessonSpan, minutesBetween } from '#lib/time.js';
+	import { formatClock, lessonSpan, minutesBetween, OVERTIME_MS } from '#lib/time.js';
 	import { DAYS, DAY_NAMES, nextSlot, slotsOf, weekday } from '#lib/schedule.js';
 	import { clock } from '#lib/clock.svelte.js';
 	import Icon from './Icon.svelte';
@@ -30,15 +30,18 @@
 	// Ohne Admin-Recht verwaltet man unter „Lehrer“ nur das eigene Konto.
 	const links = $derived(
 		(isTeacher ? NAV : NAV.filter((item) => !item.teacherOnly)).map((item) =>
-			item.href === '/lehrer' && !user.isAdmin ? { ...item, label: 'Mein Konto', count: undefined } : item
+			item.href === '/verwaltung?tab=lehrer' && !user.isAdmin ? { ...item, label: 'Mein Konto', count: undefined } : item
 		)
 	);
 	// In Gruppen mit Überschrift (Unterricht, Verwaltung) – leere Gruppen entfallen.
 	const groups = $derived(
 		[...new Set(links.map((item) => item.group))].map((name) => ({ name, items: links.filter((item) => item.group === name) }))
 	);
-	/** @type {{ students: number, teachers: number } | null} */
+	/** @type {{ students: number, teachers: number, classes: number } | null} */
 	const counts = $derived(page.data.counts ?? null);
+	/** Menüpunkt der aktuellen Seite (Verwaltung: Reiter in der Adresse, offene Klasse gehört zu „Klassen“). @param {string} href */
+	const isActive = (href) =>
+		page.url.pathname + page.url.search === href || (href === '/verwaltung' && page.url.pathname.startsWith('/verwaltung/'));
 
 	// Unterseiten im Menü: Wochenplan, Ampel, Hintergrund & Darstellung.
 	/** @type {'main' | 'plan' | 'noise' | 'display' | 'share'} */
@@ -63,12 +66,12 @@
 
 	// --- Stunden-Karte ---
 
-	// Läuft gerade eine Stunde (gespeicherte Zeiten, Beginn vorbei, Ende höchstens 30 min her)?
+	// Läuft gerade eine Stunde (gespeicherte Zeiten, Beginn vorbei, Ende höchstens 15 min her)?
 	const span = $derived(lessonSpan(settings.startTime, settings.returnTime, clock.now ?? new Date()));
 	const running = $derived.by(() => {
 		const now = clock.now;
 		const { start, end } = span;
-		return !!now && !!start && !!end && start <= now && now.getTime() < end.getTime() + 30 * 60000;
+		return !!now && !!start && !!end && start <= now && now.getTime() < end.getTime() + OVERTIME_MS;
 	});
 	const durations = $derived(/** @type {number[]} */ (page.data.lessonDurations ?? [45, 90]));
 	// Kurze Dauern plus die aus LESSON_DURATIONS (z. B. 15 · 30 · 45 · 90).
@@ -91,6 +94,10 @@
 	let message = $state('');
 
 	const rooms = $derived(/** @type {string[]} */ (page.data.rooms ?? []));
+	// Klasse der Stunde – die zuletzt genutzte ist vorausgewählt.
+	const classes = $derived(/** @type {{ id: number, name: string, color: string }[]} */ (page.data.classes ?? []));
+	let classChoice = $state(0);
+	const chosenClass = $derived(classes.find((c) => c.id === classChoice) ?? null);
 	const from = $derived(begin || hhmm(clock.now ?? new Date()));
 	const to = $derived(end || addMinutes(from, chosen));
 	// Laufende Stunde: Minuten bis zum (evtl. verlängerten) Ende, negativ = überzogen.
@@ -124,7 +131,7 @@
 	// Gespeicherte Werte als Text: ändert sich nur, wenn wirklich etwas anders gespeichert ist –
 	// nicht bei jedem Neuladen der Seite (alle 10 s), sonst springen Eingaben im Menü zurück.
 	const stored = $derived(
-		JSON.stringify([settings, running, durations[0], page.data.warnMinutes, noiseSettings, schedule])
+		JSON.stringify([settings, running, durations[0], page.data.warnMinutes, noiseSettings, schedule, page.data.activeClass])
 	);
 
 	// Beim Öffnen und nach dem Speichern die gespeicherten Werte übernehmen.
@@ -136,6 +143,7 @@
 			begin = running ? settings.startTime.slice(0, 5) : '';
 			end = running ? settings.returnTime.slice(0, 5) : '';
 			roomChoice = settings.roomChange ? settings.roomName : '';
+			classChoice = page.data.activeClass?.id ?? 0;
 			warn = page.data.warnMinutes ?? 5;
 			const next = running ? null : nextSlot(schedule, clock.now ?? new Date());
 			if (next) pick(next);
@@ -184,7 +192,8 @@
 					roomName: roomChoice || settings.roomName,
 					roomChange: roomChoice !== '',
 					...times,
-					warnMinutes: warn
+					warnMinutes: warn,
+					...(classChoice && { classId: classChoice })
 				}),
 			wasRunning ? 'Stunde aktualisiert' : 'Stunde gestartet'
 		);
@@ -360,7 +369,7 @@
 				{#each groups as group (group.name)}
 					<h3 class="group">{group.name}</h3>
 					{#each group.items as link (link.href)}
-						<a href={link.href} class:active={page.url.pathname === link.href} onclick={() => (open = false)}>
+						<a href={link.href} class:active={isActive(link.href)} onclick={() => (open = false)}>
 							<Icon name={link.icon} size={18} />
 							{link.label}
 							{#if link.count && counts}<span class="count">{counts[link.count]}</span>{/if}
@@ -385,8 +394,19 @@
 							<span class="meta">
 								{from} – {to} ·
 								{#if roomChoice}<Icon name="door" size={14} /> {roomChoice}{:else}nur Ende{/if}
+								{#if chosenClass}· <span class="kdot" style:background={chosenClass.color}></span>{chosenClass.name}{/if}
 							</span>
 						</div>
+
+						{#if classes.length > 1}
+							<label class="classes">
+								<span class="kdot" style:background={chosenClass?.color ?? 'transparent'}></span>
+								Klasse
+								<select bind:value={classChoice} aria-label="Klasse der Stunde">
+									{#each classes as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+								</select>
+							</label>
+						{/if}
 
 						<div class="tabs" role="tablist">
 							<button role="tab" aria-selected={tab === 'zeit'} class:on={tab === 'zeit'} onclick={() => (tab = 'zeit')}>Zeit</button>
@@ -900,6 +920,35 @@
 		background: var(--surface);
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
+	}
+
+	/* Klasse der Stunde */
+	.classes {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		color: var(--muted);
+		font-size: 0.85rem;
+	}
+
+	.classes select {
+		flex: 1;
+		min-width: 0;
+		padding: 5px 8px;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: var(--surface);
+		color: var(--text);
+		font: inherit;
+		font-weight: 600;
+	}
+
+	.kdot {
+		display: inline-block;
+		width: 9px;
+		height: 9px;
+		border-radius: 50%;
+		vertical-align: baseline;
 	}
 
 	.drawer .chips button.on {

@@ -22,10 +22,12 @@
 	 *   progress?: Record<string, { done: number, total: number }>,
 	 *   owners?: { id: number, username: string, title: string, hasAssignment: boolean }[],
 	 *   share?: import('#lib/server/share.js').Share | null,
-	 *   fileBase?: string
+	 *   fileBase?: string,
+	 *   plain?: boolean
 	 * }}
 	 */
-	let { assignment, canEdit, students = [], groups = [], progress = {}, owners = [], share = null, fileBase = '/api/files/' } = $props();
+	let { assignment, canEdit, students = [], groups = [], progress = {}, owners = [], share = null, fileBase = '/api/files/', plain = false } = $props();
+	// plain: geteilte Seite ohne Anmeldung – keine Knöpfe, auf dem Handy ohne Kartenrahmen und Bilder unter dem Text.
 
 	// Teilen per QR-Code; der kleine QR-Code in der Ecke gilt pro Gerät (z. B. am Beamer).
 	let shareOpen = $state(false);
@@ -453,13 +455,14 @@
 	aria-label="Auftrag"
 	class:editing
 	class:fullscreen
+	class:plain
 	class:drag-over={dragOver}
 	class:with-images={editing || shownImages.length > 0}
 	ondragenter={onDragEnter}
 	ondragleave={onDragLeave}
 	ondragover={onDragOver}
 	ondrop={onDrop}
-	style:--scale={editing ? 1 : scale}
+	style:--scale={editing ? 1 : plain ? null : scale}
 	style:--image-col={editing ? null : `${imageSize}%`}
 	style:--thumb={editing ? null : `${thumbWidth}%`}
 	bind:this={sectionEl}
@@ -467,7 +470,7 @@
 	<!-- Über die ganze Breite: Knöpfe bleiben fix, auch wenn die Bilder größer werden. -->
 	<header>
 		<span class="label">{editing ? 'Auftrag bearbeiten' : 'Auftrag'}</span>
-		{#if !editing}
+		{#if !editing && !plain}
 			<div class="tools">
 				{#if canEdit && stepTexts.length > 0}
 					<button class="tool accent" onclick={() => (goalsOpen = true)} title="Die Schritte als Ziele an die Schüler senden">
@@ -530,7 +533,7 @@
 					</button>
 				{/if}
 			</div>
-		{:else}
+		{:else if editing}
 			<!-- Oben statt unter dem Editor – so muss man zum Speichern nicht scrollen. -->
 			<div class="head-actions">
 				{#if !isEmpty}<button class="text-btn danger" onclick={remove} disabled={saving}>Auftrag löschen</button>{/if}
@@ -795,6 +798,11 @@
 		border-color: var(--lesson-accent);
 		background: color-mix(in srgb, var(--lesson-accent) 12%, transparent);
 		color: var(--lesson-accent);
+	}
+
+	/* Geteilte Seite: etwas kleiner als am Beamer (dort A− / A+). */
+	.assignment.plain {
+		--scale: 0.76;
 	}
 
 	/* Auftrag ist geteilt */
@@ -1332,6 +1340,17 @@
 		.media .help {
 			grid-column: 1 / -1;
 		}
+
+		/* Geteilte Seite: Bilder groß unter dem Text (Links bleiben darunter). */
+		.assignment.plain .media,
+		.assignment.plain .media.multi {
+			order: 0;
+			grid-template-columns: minmax(0, 1fr);
+		}
+
+		.assignment.plain .media .zoom-btn img {
+			aspect-ratio: 4 / 3;
+		}
 	}
 
 	@media (max-width: 640px) {
@@ -1339,6 +1358,15 @@
 		.assignment.editing {
 			gap: 16px;
 			padding: 16px;
+		}
+
+		/* Geteilte Seite: ohne Kartenrahmen, ganze Breite. */
+		.assignment.plain {
+			--scale: 1;
+			padding: 4px 0 0;
+			border: 0;
+			background: transparent;
+			box-shadow: none;
 		}
 
 		header {

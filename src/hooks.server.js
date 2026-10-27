@@ -8,12 +8,15 @@ import {
 	validateSession
 } from '#lib/server/auth.js';
 import { claimOrphans } from '#lib/server/db.js';
+import { migrateClasses } from '#lib/server/classes.js';
 import { getConfig } from '#lib/server/config.js';
 
 export function init() {
 	ensureEnvTeacher();
 	// Nach einem Update: bestehende Schüler, Ziele, Auftrag usw. gehören dem Admin.
 	claimOrphans();
+	// Seit den Klassen: jede Lehrkraft bekommt einmalig eine Klasse mit ihren bisherigen Schülern.
+	migrateClasses();
 }
 
 const PUBLIC_PATHS = ['/login'];

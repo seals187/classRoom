@@ -6,7 +6,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { api } from '#lib/api.js';
 	import { showError } from '#lib/dialog.svelte.js';
-	import { formatClock, lessonSpan, minutesBetween, pad } from '#lib/time.js';
+	import { formatClock, lessonEnded, lessonSpan, minutesBetween, pad } from '#lib/time.js';
 	import { nextSlot } from '#lib/schedule.js';
 	import logo from '#lib/assets/logo.svg';
 	import Icon from './Icon.svelte';
@@ -28,12 +28,14 @@
 	const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
 	const LAMPS = /** @type {const} */ (['red', 'yellow', 'green']);
 	const LABELS = { red: 'zu laut', yellow: 'etwas leiser', green: 'gut' };
-	const ADMIN_PAGES = ['/schueler', '/lehrer'];
 	const GOAL_PAGES = ['/stundenziele', '/selbstlernen'];
 
 	const isTeacher = $derived(user.role === 'teacher');
 	const path = $derived(page.url.pathname);
-	const isAdmin = $derived(ADMIN_PAGES.includes(path));
+	const isAdmin = $derived(path === '/verwaltung' || path.startsWith('/verwaltung/'));
+	// Klasse der Stunde: farbiger Punkt + Name
+	/** @type {{ id: number, name: string, color: string } | null} */
+	const klass = $derived(page.data.activeClass ?? null);
 	/** @type {import('#lib/server/db.js').Student[] | null} */
 	const students = $derived(GOAL_PAGES.includes(path) ? (page.data.students ?? null) : null);
 
@@ -48,13 +50,15 @@
 	const span = $derived(now ? lessonSpan(settings.startTime, settings.returnTime, now) : { start: null, end: null });
 	const start = $derived(span.start);
 	const end = $derived(span.end);
+	// 15 min nach dem Ende ist die Stunde von selbst vorbei – dann wieder „Stunde starten“.
+	const ended = $derived(!!now && lessonEnded(span, now));
 	const elapsed = $derived(now && start ? Math.max(0, now.getTime() - start.getTime()) : 0);
 	const remaining = $derived(now && end ? end.getTime() - now.getTime() : null);
 	const total = $derived(start && end && end > start ? end.getTime() - start.getTime() : null);
 	const progress = $derived(remaining !== null && remaining <= 0 ? 1 : total ? Math.min(1, elapsed / total) : 0);
 	// Vier Phasen: arbeiten → aufräumen (WARN_MINUTES) → losgehen (GO_MINUTES) → Zeit um.
 	const status = $derived(
-		remaining === null
+		remaining === null || ended
 			? ''
 			: remaining <= 0
 				? 'over'
@@ -155,7 +159,8 @@
 	});
 </script>
 
-<header class="band" class:go={status === 'go'} class:over={status === 'over'}>
+<!-- Verwaltung zeigt keinen Zeitbalken – dann auch nicht rot/orange leuchten. -->
+<header class="band" class:go={status === 'go' && !isAdmin} class:over={status === 'over' && !isAdmin}>
 	<button
 		class="menu-btn"
 		class:open={menuOpen}
@@ -173,11 +178,15 @@
 			<img src={logo} alt="" width="32" height="32" />
 			<span class="wordmark">class<span class="r">R</span>oom</span>
 		</a>
+		<span class="crumb">/ Verwaltung</span>
 	{:else}
-		{#if settings.returnTime}
+		{#if settings.returnTime && !ended}
 			<div class="time {status}" class:inside={leftInside}>
 				<div class="meta">
-					<span>{#if settings.startTime}Beginn {short(settings.startTime)}{/if}</span>
+					<span>
+						{#if klass}<span class="klass"><span class="kdot" style:background={klass.color}></span>{klass.name}</span>{/if}
+						{#if settings.startTime}Beginn {short(settings.startTime)}{/if}
+					</span>
 					<!-- Phase klein in der Mitte, das Ziel („Zurück in … um …“) immer rechts -->
 					<strong class="phase" class:callout>
 						{#if status === 'soon'}<Icon name="broom" size={14} />{:else if callout && settings.roomChange}<Icon name="door" size={17} />{/if}
@@ -239,11 +248,14 @@
 								{#if plan ? plan.room : settings.roomChange}
 									<span class="opt-room">· <Icon name="door" size={14} /> {plan ? plan.room : settings.roomName}</span>
 								{/if}
+								{#if klass}<span class="klass" title="Klasse {klass.name}">· <span class="kdot" style:background={klass.color}></span><span class="kname">{klass.name}</span></span>{/if}
 							</span>
 						</div>
 						<button class="adjust" onclick={() => (menuOpen = true)}>Anpassen…</button>
 					{:else}
-						<span class="idle-info">Stunde noch nicht gestartet</span>
+						<span class="idle-info">
+							Stunde noch nicht gestartet{#if klass}<span class="klass" title="Klasse {klass.name}">· <span class="kdot" style:background={klass.color}></span><span class="kname">{klass.name}</span></span>{/if}
+						</span>
 					{/if}
 				</div>
 			</div>
@@ -251,7 +263,7 @@
 
 		{#if students}
 			<div class="class-stats">
-				<span class="label">Klasse</span>
+				<span class="label">{#if klass}<span class="kdot" style:background={klass.color}></span> <span class="kname">{klass.name}</span>{:else}Klasse{/if}</span>
 				<span class="big"><strong>{doneGoals}/{totalGoals}</strong> Ziele</span>
 				<span class="small">{finished} von {students.length} fertig</span>
 			</div>
@@ -384,6 +396,45 @@
 
 	.brand img {
 		border-radius: 8px;
+	}
+
+	.crumb {
+		margin-left: -8px;
+		color: var(--muted);
+		font-size: 1.05rem;
+	}
+
+	/* Klasse der Stunde: farbiger Punkt + Name */
+	.klass {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		margin-left: 4px;
+		font-weight: 700;
+		white-space: nowrap;
+	}
+
+	.meta .klass {
+		margin: 0 8px 0 0;
+	}
+
+	/* Lange Namen im Startbalken kürzen, damit „Anpassen…“ Platz behält. */
+	.kname {
+		max-width: 9em;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.adjust {
+		white-space: nowrap;
+	}
+
+	.kdot {
+		display: inline-block;
+		vertical-align: 0;
+		width: 9px;
+		height: 9px;
+		border-radius: 50%;
 	}
 
 	.wordmark {
@@ -586,7 +637,8 @@
 	/* Keine Stunde: Balken wie der Zeitbalken, Start-Knopf und Infos in der Mitte, „Anpassen…“ rechts. */
 	.idle-bar {
 		display: grid;
-		grid-template-columns: 1fr auto 1fr;
+		/* Mitte zentriert; rechts mindestens so breit wie „Anpassen…“. */
+		grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr);
 		align-items: center;
 		gap: 12px;
 		min-height: 44px;
@@ -605,21 +657,25 @@
 		gap: 5px;
 	}
 
-	/* Wenig Platz (z. B. neben der Klassen-Statistik): zuerst den Raum, dann „bis …“ weglassen. */
+	/* Wenig Platz (z. B. neben der Klassen-Statistik): zuerst den Raum, dann „bis …“ weglassen – die Klasse bleibt. */
 	.time:has(.idle-bar) {
 		container-type: inline-size;
 	}
 
 	/* Auf dem Smartphone darf der Balken umbrechen – dort nichts weglassen. */
 	@media (min-width: 761px) {
-		@container (max-width: 560px) {
+		@container (max-width: 640px) {
 			.opt-room {
 				display: none;
 			}
 		}
 
-		@container (max-width: 440px) {
+		@container (max-width: 520px) {
 			.opt-end {
+				display: none;
+			}
+
+			.idle-info .klass {
 				display: none;
 			}
 		}

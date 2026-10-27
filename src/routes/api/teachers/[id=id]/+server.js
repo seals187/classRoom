@@ -1,15 +1,16 @@
 import { error } from '@sveltejs/kit';
-import { deleteTeacher, requireAdmin, requireTeacher, setTeacherPassword, setTeacherRights } from '#lib/server/auth.js';
+import { deleteTeacher, renameTeacher, requireAdmin, requireTeacher, setTeacherPassword, setTeacherRights } from '#lib/server/auth.js';
 
-// Eigenes Passwort darf jede Lehrkraft ändern; fremde Passwörter und Rechte nur der Admin.
+// Eigenes Passwort darf jede Lehrkraft ändern; fremde Passwörter, Namen und Rechte nur der Admin.
 export async function PATCH({ locals, params, request }) {
 	const user = requireTeacher(locals);
 	const id = Number(params.id);
-	const { password, isAdmin, seesAll } = await request.json();
-	if (id !== user.id || isAdmin !== undefined || seesAll !== undefined) requireAdmin(locals);
-	if (password === undefined && isAdmin === undefined && seesAll === undefined) error(400, 'Nichts zu ändern');
+	const { password, isAdmin, username } = await request.json();
+	if (id !== user.id || isAdmin !== undefined || username !== undefined) requireAdmin(locals);
+	if (password === undefined && isAdmin === undefined && username === undefined) error(400, 'Nichts zu ändern');
 	if (password !== undefined) setTeacherPassword(id, { password });
-	if (isAdmin !== undefined || seesAll !== undefined) setTeacherRights(id, { isAdmin, seesAll }, user.id);
+	if (username !== undefined) renameTeacher(id, username);
+	if (isAdmin !== undefined) setTeacherRights(id, { isAdmin }, user.id);
 	return new Response(null, { status: 204 });
 }
 

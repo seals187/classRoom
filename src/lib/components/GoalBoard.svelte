@@ -131,7 +131,7 @@
 		<section class="empty">
 			<h2>Noch keine Schüler</h2>
 			{#if isTeacher}
-				<p>Lege zuerst die Klasse unter <a href="/schueler">Schüler verwalten</a> an.</p>
+				<p>In der aktiven Klasse sind noch keine Schüler – unter <a href="/verwaltung">Klassen</a> hinzufügen.</p>
 			{/if}
 		</section>
 	{:else if focused && ownStudent}

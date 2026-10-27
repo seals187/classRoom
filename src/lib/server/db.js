@@ -5,6 +5,7 @@ import { error } from '@sveltejs/kit';
 import { getConfig, TIME } from './config.js';
 import { generatePassword, hashPassword } from './password.js';
 import { suggestUsername as suggestFreeUsername } from '#lib/username.js';
+import { syncVisibility } from './classes.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS settings (
@@ -86,6 +87,27 @@ CREATE TABLE IF NOT EXISTS teacher_settings (
 	value TEXT NOT NULL,
 	PRIMARY KEY (teacher_id, key)
 );
+-- Klassen: Schüler und Lehrkräfte je in einer oder mehreren. Wer welche Schüler sieht (student_teachers)
+-- wird daraus berechnet, siehe classes.js.
+CREATE TABLE IF NOT EXISTS classes (
+	id INTEGER PRIMARY KEY,
+	name TEXT NOT NULL,
+	color TEXT NOT NULL,
+	archived INTEGER NOT NULL DEFAULT 0,
+	created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS class_students (
+	class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+	student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+	PRIMARY KEY (class_id, student_id)
+);
+CREATE INDEX IF NOT EXISTS class_students_student ON class_students(student_id);
+CREATE TABLE IF NOT EXISTS class_teachers (
+	class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+	teacher_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	PRIMARY KEY (class_id, teacher_id)
+);
+CREATE INDEX IF NOT EXISTS class_teachers_teacher ON class_teachers(teacher_id);
 CREATE TABLE IF NOT EXISTS assignments (
 	teacher_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
 	title TEXT NOT NULL DEFAULT '',
@@ -181,10 +203,13 @@ export function claimOrphans() {
 	}
 	const id = admin.id;
 	db.transaction(() => {
-		db.prepare(
-			`INSERT INTO student_teachers (student_id, teacher_id)
-			 SELECT s.id, ? FROM students s WHERE NOT EXISTS (SELECT 1 FROM student_teachers st WHERE st.student_id = s.id)`
-		).run(id);
+		// Vor den Klassen: Schüler ohne Lehrkraft an den Admin. Danach bestimmen die Klassen, wer wen sieht.
+		if (!db.prepare("SELECT 1 FROM settings WHERE key = 'migrated.classes'").get()) {
+			db.prepare(
+				`INSERT INTO student_teachers (student_id, teacher_id)
+				 SELECT s.id, ? FROM students s WHERE NOT EXISTS (SELECT 1 FROM student_teachers st WHERE st.student_id = s.id)`
+			).run(id);
+		}
 		db.prepare('UPDATE goals SET teacher_id = ? WHERE teacher_id IS NULL').run(id);
 		db.prepare('UPDATE student_groups SET teacher_id = ? WHERE teacher_id IS NULL').run(id);
 		db.prepare('UPDATE backgrounds SET teacher_id = ? WHERE teacher_id IS NULL AND student_id IS NULL').run(id);
@@ -516,12 +541,13 @@ export function clearTest(owner) {
  */
 /** @typedef {{ username: string, password: string }} Credentials */
 /**
- * Wessen Daten gelten (`owner`: Lehrkraft) und ob alle Schüler sichtbar sind oder nur die eigenen.
- * @typedef {{ owner: number, all: boolean }} Scope
+ * Wessen Daten gelten (`owner`: Lehrkraft), ob alle Schüler sichtbar sind (Admin in der Verwaltung) oder nur
+ * die der eigenen Klassen, und optional nur die Schüler einer Klasse (`classId`, die aktive Klasse der Stunde).
+ * @typedef {{ owner: number, all: boolean, classId?: number | null }} Scope
  */
 
 /**
- * Darf diese Lehrkraft den Schüler sehen (eigener Schüler oder „sieht alle“)?
+ * Darf diese Lehrkraft den Schüler sehen (Schüler einer ihrer Klassen bzw. Admin)?
  * @param {Scope} scope
  * @param {number} studentId
  */
@@ -540,7 +566,14 @@ export function countPeople(scope) {
 		students: scope.all
 			? count('SELECT COUNT(*) AS n FROM students')
 			: count('SELECT COUNT(*) AS n FROM student_teachers WHERE teacher_id = ?', scope.owner),
-		teachers: count("SELECT COUNT(*) AS n FROM users WHERE role = 'teacher'")
+		teachers: count("SELECT COUNT(*) AS n FROM users WHERE role = 'teacher'"),
+		classes: scope.all
+			? count('SELECT COUNT(*) AS n FROM classes WHERE archived = 0')
+			: count(
+					`SELECT COUNT(*) AS n FROM classes c JOIN class_teachers ct ON ct.class_id = c.id
+					 WHERE c.archived = 0 AND ct.teacher_id = ?`,
+					scope.owner
+				)
 	};
 }
 
@@ -560,10 +593,11 @@ export function listStudents(scope, kind = 'self') {
 				 FROM students s
 				 LEFT JOIN users u ON u.student_id = s.id
 				 LEFT JOIN student_teachers st ON st.student_id = s.id AND st.teacher_id = ?
-				 WHERE ? OR st.teacher_id IS NOT NULL
+				 WHERE CASE WHEN ? THEN s.id IN (SELECT student_id FROM class_students WHERE class_id = ?)
+				   ELSE ? OR st.teacher_id IS NOT NULL END
 				 ORDER BY s.last_name COLLATE NOCASE, s.first_name COLLATE NOCASE`
 			)
-			.all(scope.owner, scope.all ? 1 : 0)
+			.all(scope.owner, scope.classId ? 1 : 0, scope.classId ?? 0, scope.all ? 1 : 0)
 	);
 	const goals = /** @type {{ id: number, studentId: number, text: string, done: number, createdAt: number | null }[]} */ (
 		db
@@ -589,46 +623,24 @@ export function listStudents(scope, kind = 'self') {
 	return [...byId.values()];
 }
 
-/** Lehrkräfte je Schüler (für den Admin in „Schüler verwalten“). @returns {Record<number, number[]>} */
-export function studentTeacherIds() {
-	const rows = /** @type {{ studentId: number, teacherId: number }[]} */ (
-		getDb().prepare('SELECT student_id AS studentId, teacher_id AS teacherId FROM student_teachers').all()
-	);
-	/** @type {Record<number, number[]>} */
-	const map = {};
-	for (const r of rows) (map[r.studentId] ??= []).push(r.teacherId);
-	return map;
-}
-
 /**
- * Lehrkräfte eines Schülers festlegen (nur Admin). Mindestens eine.
- * @param {number} studentId
- * @param {unknown} input
+ * Mehrere Schüler auf einmal in eine Klasse (z. B. aus einer eingefügten Liste). Alles oder nichts.
+ * @param {number} classId
+ * @param {unknown} list [{ firstName, lastName, username? }]
  */
-export function setStudentTeachers(studentId, input) {
-	if (!Array.isArray(input)) error(400, 'Keine Lehrkräfte angegeben');
-	const db = getDb();
-	const teachers = /** @type {{ id: number }[]} */ (db.prepare("SELECT id FROM users WHERE role = 'teacher'").all());
-	const ids = teachers.map((t) => t.id).filter((id) => input.includes(id));
-	if (ids.length === 0) error(400, 'Jeder Schüler braucht mindestens eine Lehrkraft');
-	db.transaction(() => {
-		db.prepare(`DELETE FROM student_teachers WHERE student_id = ? AND teacher_id NOT IN (${ids.map(() => '?').join(', ')})`).run(
-			studentId,
-			...ids
-		);
-		const link = db.prepare('INSERT OR IGNORE INTO student_teachers (student_id, teacher_id) VALUES (?, ?)');
-		for (const id of ids) link.run(studentId, id);
-	})();
-	return ids;
+export function addStudents(classId, list) {
+	if (!Array.isArray(list) || list.length === 0) error(400, 'Keine Schüler angegeben');
+	if (list.length > 200) error(400, 'Höchstens 200 Schüler auf einmal');
+	return getDb().transaction(() => list.map((input) => addStudent(classId, input ?? {})))();
 }
 
 /**
- * Legt den Schüler samt Login an und gibt ihn der Lehrkraft. Das Klartext-Passwort wird nur hier einmal zurückgegeben.
- * @param {number} owner
+ * Legt den Schüler samt Login in der Klasse an. Das Klartext-Passwort wird nur hier einmal zurückgegeben.
+ * @param {number} classId
  * @param {Record<string, unknown>} input
  * @returns {{ student: Student, credentials: Credentials }}
  */
-export function addStudent(owner, input) {
+export function addStudent(classId, input) {
 	const firstName = requiredText(input.firstName, 'Vorname', 60);
 	const lastName = requiredText(input.lastName, 'Nachname', 60);
 	const wanted = typeof input.username === 'string' && input.username.trim() ? normalizeUsername(input.username) : null;
@@ -639,7 +651,7 @@ export function addStudent(owner, input) {
 		const id = Number(
 			db.prepare('INSERT INTO students (first_name, last_name) VALUES (?, ?)').run(firstName, lastName).lastInsertRowid
 		);
-		db.prepare('INSERT INTO student_teachers (student_id, teacher_id) VALUES (?, ?)').run(id, owner);
+		db.prepare('INSERT INTO class_students (class_id, student_id) VALUES (?, ?)').run(classId, id);
 		const username = wanted ?? suggestUsername(firstName, lastName);
 		const password = generatePassword();
 		db.prepare("INSERT INTO users (username, password_hash, role, student_id) VALUES (?, ?, 'student', ?)").run(
@@ -647,6 +659,7 @@ export function addStudent(owner, input) {
 			hashPassword(password),
 			id
 		);
+		syncVisibility();
 		return { student: { id, firstName, lastName, username, goals: [], activeAt: null }, credentials: { username, password } };
 	})();
 }
@@ -712,23 +725,23 @@ export function updateStudent(id, input) {
 }
 
 /**
- * Hat der Schüler noch andere Lehrkräfte und sieht diese Lehrkraft nicht alle, wird er nur aus ihrer
- * Klasse entfernt (samt ihren Zielen). Sonst wird er ganz gelöscht.
+ * Schüler ganz löschen. Ohne Admin-Recht nur, wenn er in keiner fremden Klasse ist – sonst nur aus der
+ * eigenen Klasse entfernen.
  * @param {Scope} scope
  * @param {number} id
- * @returns {{ removed: 'class' | 'student' }}
  */
 export function deleteStudent(scope, id) {
 	const db = getDb();
-	const others = /** @type {{ n: number }} */ (
-		db.prepare('SELECT COUNT(*) AS n FROM student_teachers WHERE student_id = ? AND teacher_id != ?').get(id, scope.owner)
-	).n;
-	if (!scope.all && others > 0) {
-		db.transaction(() => {
-			db.prepare('DELETE FROM student_teachers WHERE student_id = ? AND teacher_id = ?').run(id, scope.owner);
-			db.prepare('DELETE FROM goals WHERE student_id = ? AND teacher_id = ?').run(id, scope.owner);
-		})();
-		return { removed: 'class' };
+	if (!scope.all) {
+		const foreign = /** @type {{ name: string } | undefined} */ (
+			db
+				.prepare(
+					`SELECT c.name FROM class_students cs JOIN classes c ON c.id = cs.class_id WHERE cs.student_id = ?
+					 AND NOT EXISTS (SELECT 1 FROM class_teachers ct WHERE ct.class_id = c.id AND ct.teacher_id = ?)`
+				)
+				.get(id, scope.owner)
+		);
+		if (foreign) error(409, `Der Schüler ist auch in der Klasse „${foreign.name}“ – bitte nur aus deiner Klasse entfernen`);
 	}
 	const { changes } = db.prepare('DELETE FROM students WHERE id = ?').run(id);
 	if (!changes) error(404, 'Schüler nicht gefunden');
@@ -811,8 +824,8 @@ export function addGoalsToAll(scope, texts, kind, replace = false, studentIds = 
 	/** @type {number[]} */
 	const goalIds = [];
 	db.transaction(() => {
-		if (replace && students.length === all.length) clearGoals(scope.owner, k);
-		else if (replace) {
+		// Nur bei diesen Schülern (der aktiven Klasse) ersetzen – Ziele in anderen Klassen bleiben.
+		if (replace) {
 			for (const { id } of students) {
 				db.prepare('DELETE FROM goals WHERE student_id = ? AND teacher_id = ? AND kind = ?').run(id, scope.owner, k);
 				db.prepare(`UPDATE student_teachers SET last_check_${k} = NULL WHERE student_id = ? AND teacher_id = ?`).run(

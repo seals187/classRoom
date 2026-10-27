@@ -4,14 +4,15 @@ import { getConfig } from './config.js';
 import { deleteFilesIfUnused } from './assignment.js';
 import { assertUsernameFree, canSeeStudent, claimOrphans, getDb, getGoalOwner, normalizeUsername } from './db.js';
 import { hashPassword, verifyPassword } from './password.js';
+import { activeClass } from './classes.js';
 
 export const SESSION_COOKIE = 'classroom_session';
 
 /**
- * `isAdmin`: verwaltet Lehrkräfte und ordnet Schüler zu. `seesAll`: Lehrkraft sieht alle Schüler, nicht nur ihre.
+ * `isAdmin`: verwaltet Lehrkräfte und Klassen und sieht alle Schüler.
  * @typedef {{
  *   id: number, username: string, role: 'teacher' | 'student', studentId: number | null, displayName: string,
- *   isAdmin: boolean, seesAll: boolean, actingAdmin: { id: number, username: string } | null
+ *   isAdmin: boolean, actingAdmin: { id: number, username: string } | null
  * }} User
  * `actingAdmin`: Admin, der sich als diese Person angemeldet hat („Anmelden als …“), sonst null.
  */
@@ -107,11 +108,11 @@ function createSession(userId, adminId = null) {
  * @returns {User | null}
  */
 export function validateSession(token) {
-	const row = /** @type {(Omit<User, 'displayName' | 'isAdmin' | 'seesAll' | 'actingAdmin'> & { firstName: string | null, lastName: string | null, isAdmin: number, seesAll: number, adminId: number | null, adminName: string | null, adminIsAdmin: number | null }) | undefined} */ (
+	const row = /** @type {(Omit<User, 'displayName' | 'isAdmin' | 'actingAdmin'> & { firstName: string | null, lastName: string | null, isAdmin: number, adminId: number | null, adminName: string | null, adminIsAdmin: number | null }) | undefined} */ (
 		getDb()
 			.prepare(
 				`SELECT u.id, u.username, u.role, u.student_id AS studentId, s.first_name AS firstName, s.last_name AS lastName,
-				   u.is_admin AS isAdmin, u.sees_all AS seesAll,
+				   u.is_admin AS isAdmin,
 				   se.admin_id AS adminId, a.username AS adminName, a.is_admin AS adminIsAdmin
 				 FROM sessions se
 				 JOIN users u ON u.id = se.user_id
@@ -122,7 +123,7 @@ export function validateSession(token) {
 			.get(hashToken(token), Date.now())
 	);
 	if (!row) return null;
-	const { firstName, lastName, isAdmin, seesAll, adminId, adminName, adminIsAdmin, ...user } = row;
+	const { firstName, lastName, isAdmin, adminId, adminName, adminIsAdmin, ...user } = row;
 	// Ist der Admin dahinter kein Admin mehr, endet auch die Anmeldung als andere Person.
 	if (adminId && adminIsAdmin !== 1) return null;
 	const teacher = user.role === 'teacher';
@@ -130,7 +131,6 @@ export function validateSession(token) {
 		...user,
 		displayName: firstName ? `${firstName} ${lastName}` : user.username,
 		isAdmin: teacher && isAdmin === 1,
-		seesAll: teacher && seesAll === 1,
 		actingAdmin: adminId && adminName ? { id: adminId, username: adminName } : null
 	};
 }
@@ -204,18 +204,25 @@ export function resolveOwner(user, chosen) {
 }
 
 /**
- * Für die Datenbank-Abfragen: wessen Daten (`owner`) und ob alle Schüler sichtbar sind.
+ * Für die Datenbank-Abfragen: wessen Daten (`owner`), Schüler der eigenen Klassen.
  * @param {App.Locals} locals
  * @returns {import('./db.js').Scope}
  */
-export const scope = (locals) => ({ owner: locals.owner, all: !!locals.user?.seesAll });
+export const scope = (locals) => ({ owner: locals.owner, all: false });
 
 /**
- * Wie `scope`, aber der Admin sieht beim Verwalten immer alle Schüler (um sie zuzuordnen).
+ * Nur die Schüler der aktiven Klasse (Stunde, Stundenziele, „Ziele an alle“).
  * @param {App.Locals} locals
  * @returns {import('./db.js').Scope}
  */
-export const manageScope = (locals) => ({ owner: locals.owner, all: !!(locals.user?.seesAll || locals.user?.isAdmin) });
+export const classScope = (locals) => ({ owner: locals.owner, all: false, classId: activeClass(locals.owner)?.id ?? 0 });
+
+/**
+ * Wie `scope`, aber der Admin sieht beim Verwalten immer alle Schüler.
+ * @param {App.Locals} locals
+ * @returns {import('./db.js').Scope}
+ */
+export const manageScope = (locals) => ({ owner: locals.owner, all: !!locals.user?.isAdmin });
 
 /** @param {string} token */
 export function deleteSession(token) {
@@ -304,20 +311,28 @@ function validPassword(value) {
 	return v;
 }
 
-/** @typedef {{ id: number, username: string, isAdmin: boolean, seesAll: boolean, students: number }} TeacherInfo */
+/** @typedef {{ id: number, username: string, isAdmin: boolean, students: number, classIds: number[] }} TeacherInfo */
 
 /** @returns {TeacherInfo[]} */
 export function listTeachers() {
-	const rows = /** @type {{ id: number, username: string, isAdmin: number, seesAll: number, students: number }[]} */ (
-		getDb()
+	const db = getDb();
+	const rows = /** @type {{ id: number, username: string, isAdmin: number, students: number }[]} */ (
+		db
 			.prepare(
-				`SELECT u.id, u.username, u.is_admin AS isAdmin, u.sees_all AS seesAll,
+				`SELECT u.id, u.username, u.is_admin AS isAdmin,
 				   (SELECT COUNT(*) FROM student_teachers st WHERE st.teacher_id = u.id) AS students
 				 FROM users u WHERE u.role = 'teacher' ORDER BY u.username`
 			)
 			.all()
 	);
-	return rows.map((r) => ({ ...r, isAdmin: r.isAdmin === 1, seesAll: r.seesAll === 1 }));
+	const links = /** @type {{ teacherId: number, classId: number }[]} */ (
+		db.prepare('SELECT teacher_id AS teacherId, class_id AS classId FROM class_teachers').all()
+	);
+	return rows.map((r) => ({
+		...r,
+		isAdmin: r.isAdmin === 1,
+		classIds: links.filter((l) => l.teacherId === r.id).map((l) => l.classId)
+	}));
 }
 
 /** @param {Record<string, unknown>} input */
@@ -344,7 +359,24 @@ export function setTeacherPassword(id, input) {
 }
 
 /**
- * Admin-Rechte und „sieht alle Schüler“ setzen. Das eigene Admin-Recht kann man sich nicht nehmen.
+ * Benutzername einer Lehrkraft ändern – nicht beim Konto aus der .env (das würde beim Start neu angelegt).
+ * @param {number} id
+ * @param {unknown} value
+ */
+export function renameTeacher(id, value) {
+	const username = normalizeUsername(value);
+	const db = getDb();
+	const current = /** @type {{ username: string } | undefined} */ (
+		db.prepare("SELECT username FROM users WHERE id = ? AND role = 'teacher'").get(id)
+	);
+	if (!current) error(404, 'Lehrkraft nicht gefunden');
+	if (current.username.toLowerCase() === getConfig().teacher.username) error(400, 'Das Konto aus der .env lässt sich nur dort umbenennen');
+	assertUsernameFree(username, id);
+	db.prepare('UPDATE users SET username = ? WHERE id = ?').run(username, id);
+}
+
+/**
+ * Admin-Recht setzen. Das eigene Admin-Recht kann man sich nicht nehmen.
  * @param {number} id
  * @param {Record<string, unknown>} input
  * @param {number} currentUserId
@@ -356,7 +388,6 @@ export function setTeacherRights(id, input, currentUserId) {
 		if (id === currentUserId && input.isAdmin !== true) error(400, 'Du kannst dir das Admin-Recht nicht selbst nehmen');
 		db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(input.isAdmin === true ? 1 : 0, id);
 	}
-	if (input.seesAll !== undefined) db.prepare('UPDATE users SET sees_all = ? WHERE id = ?').run(input.seesAll === true ? 1 : 0, id);
 }
 
 /**

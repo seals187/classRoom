@@ -2,7 +2,7 @@ import { randomInt } from 'node:crypto';
 import { error } from '@sveltejs/kit';
 import { getAssignment, getFile } from './assignment.js';
 import { getConfig } from './config.js';
-import { getDb } from './db.js';
+import { getDb, getSettings, getWarnMinutes } from './db.js';
 
 // Öffentlicher Link zum Auftrag (/a/<code>, QR-Code): ohne Anmeldung, nur lesen.
 
@@ -125,7 +125,7 @@ function ownerOf(code) {
  * Was die öffentliche Seite zeigt: nur Titel, Text, Bilder und Links – keine Namen, Ziele oder Klasseninfos.
  * @param {string} code
  * @param {string} ip
- * @returns {{ state: 'ok', assignment: import('./assignment.js').Assignment } | { state: 'gone' | 'blocked' }}
+ * @returns {{ state: 'ok', assignment: import('./assignment.js').Assignment, lesson: PublicLesson } | { state: 'gone' | 'blocked' }}
  */
 export function publicAssignment(code, ip) {
 	if (blocked(ip)) return { state: 'blocked' };
@@ -135,7 +135,7 @@ export function publicAssignment(code, ip) {
 		return { state: 'gone' };
 	}
 	const { title, html, images } = getAssignment(owner);
-	return { state: 'ok', assignment: { title, html, images, updatedAt: null } };
+	return { state: 'ok', assignment: { title, html, images, updatedAt: null }, lesson: publicLesson(owner) };
 }
 
 /**
@@ -152,4 +152,15 @@ export function publicImage(code, id, ip) {
 		error(404, 'Bild nicht gefunden');
 	}
 	return getFile(id);
+}
+
+/**
+ * Stunde für die geteilte Seite (Zeitbalken): nur Zeiten und Raum – keine Namen oder Klasseninfos.
+ * @typedef {{ startTime: string, returnTime: string, roomName: string, roomChange: boolean, warnMinutes: number, goMinutes: number }} PublicLesson
+ * @param {number} owner
+ * @returns {PublicLesson}
+ */
+function publicLesson(owner) {
+	const { startTime, returnTime, roomName, roomChange } = getSettings(owner);
+	return { startTime, returnTime, roomName, roomChange, warnMinutes: getWarnMinutes(owner), goMinutes: getConfig().goMinutes };
 }

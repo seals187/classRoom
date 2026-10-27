@@ -3,6 +3,7 @@ import { manageScope, teachersOf } from '#lib/server/auth.js';
 import { countPeople, getNoiseSettings, getRooms, getSchedule, getSettings, getWarnMinutes } from '#lib/server/db.js';
 import { getBackground } from '#lib/server/backgrounds.js';
 import { listShares } from '#lib/server/share.js';
+import { activeClass, listClasses } from '#lib/server/classes.js';
 
 export function load({ locals }) {
 	if (!locals.user) return { user: null };
@@ -20,6 +21,9 @@ export function load({ locals }) {
 		// Zahlen neben „Schüler / Lehrer verwalten“ im Menü
 		counts: isTeacher ? countPeople(manageScope(locals)) : null,
 		rooms: isTeacher ? getRooms(owner) : [],
+		// Klasse der Stunde (Kopfband, Stundenziele) und zur Wahl beim Starten.
+		activeClass: activeClass(owner),
+		classes: isTeacher ? listClasses(locals.user).map(({ id, name, color }) => ({ id, name, color })) : [],
 		schedule: isTeacher ? getSchedule(owner) : [],
 		// Geteilte Aufträge (QR-Code): Adresse für den Link, Standard-Gültigkeit, Anzahl im Menü.
 		sharing: isTeacher

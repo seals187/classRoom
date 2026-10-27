@@ -2,6 +2,26 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [0.4.0] – 2026-10-27
+
+### Neu
+- **Klassen:** Klassen mit Name und Farbe. Ein Schüler kann in mehreren Klassen sein, eine Lehrkraft mehrere Klassen unterrichten und eine Klasse mehrere Lehrkräfte haben. Lehrkräfte sehen nur ihre Klassen und deren Schüler, der Admin sieht alles. Lehrkräfte können eigene Klassen anlegen
+- **Verwaltung mit Reitern Klassen · Schüler · Lehrkräfte** (ersetzt „Schüler verwalten“ und „Lehrer verwalten“):
+  - **Klassen** als Karten mit Farbe, Anzahl, Avataren und Lehrkräften; „+ Neue Klasse“; archivierte Klassen darunter zum Wiederherstellen
+  - **Klasse öffnen:** Schülerliste mit Avatar, Name, Kürzel, Fortschritt (Stunde/Selbst) und Aktionen; rechts die Lehrkräfte der Klasse (Admin weist zu) und Schnell-Aktionen: Zugangsdaten drucken, Schüler aus Liste einfügen, alle Passwörter neu, Name und Farbe, archivieren
+  - **Schüler hinzufügen:** einzeln, als eingefügte Liste (ein Name pro Zeile, auch aus Excel, Vorschau mit automatischem Kürzel) oder aus einer anderen Klasse übernehmen. Die neuen Zugangsdaten lassen sich gleich als Kärtchen drucken
+  - **Schüler:** alle Schüler mit ihren Klassen als farbige Etiketten, Filter nach Klasse und Suche; Bearbeiten ändert auch die Klassen
+  - **Lehrkräfte:** Tabelle Lehrkraft × Klasse mit Häkchen; Passwort, Umbenennen, Admin-Recht, „Anmelden als …“ und Löschen
+- **Stunde mit Klasse:** Beim Starten wählt man im Menü die Klasse (die zuletzt genutzte ist vorausgewählt); das Kopfband zeigt sie mit farbigem Punkt. Stundenziele und Kacheln gelten nur für die Schüler dieser Klasse, „Ziele aus dem Auftrag → Alle“ ebenso. Selbstlern-Ziele bleiben pro Schüler über alle Klassen
+
+- **Geteilte Seite (QR-Code) mit Zeitband der Stunde:** zeigt wie am Beamer, wie viel Zeit bleibt – Arbeitsphase als schmales Band mit Restzeit, Balken und „Zurück in … um …“; beim Aufräumen wird das Band gelb-orange; zum Losgehen erscheint die Anweisung groß in Orange (auf dem Handy bildschirmfüllend, der Auftrag ist dann eingeklappt und lässt sich aufklappen); ohne Stunde nur Logo, „Keine Stunde aktiv“ und die Uhrzeit. Auf dem Handy ohne Kartenrahmen, Bilder unter dem Text, ohne Knöpfe. Es werden nur Zeiten und Raum übertragen – keine Namen oder Klasse
+
+### Geändert
+- **Update:** Jede Lehrkraft bekommt einmalig eine Klasse mit ihren bisherigen Schülern – der Admin „Meine Klasse“, die anderen „Klasse <Name>“. Wer „Sieht alle Schüler“ hatte, bekommt alle Klassen; die Einstellung selbst entfällt
+- **Stunde endet von selbst** 15 Minuten nach dem Ende: Kopfband und Menü zeigen dann wieder „▶ Stunde starten“ (vorher blieb „Zeit um · +444 min“ stehen, ohne dass sich die Stunde im Menü beenden ließ)
+- **Verwaltung leuchtet nicht mehr rot/orange**, wenn die Zeit der Stunde um ist – dort gibt es ja keinen Zeitbalken
+- **Hinweis „Angemeldet als …“** ist jetzt ein kleines Kärtchen mit „← Zurück zu …“ darunter
+
 ## [0.3.7] – 2026-10-27
 
 ### Neu
@@ -188,6 +208,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.4.0]: https://github.com/seals187/classRoom/compare/v0.3.7...v0.4.0
 [0.3.7]: https://github.com/seals187/classRoom/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/seals187/classRoom/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/seals187/classRoom/compare/v0.3.4...v0.3.5

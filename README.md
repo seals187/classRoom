@@ -1,7 +1,7 @@
 <p align="center"><img src="assets/banner-1.png" alt="classRoom – Der Werkzeugkasten für den Unterricht" width="100%"></p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.3.7-6c8cff" alt="Version 0.3.7"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.4.0-6c8cff" alt="Version 0.4.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/lizenz-AGPL--3.0-3dba79" alt="Lizenz AGPL-3.0"></a>
   <img src="https://img.shields.io/badge/docker-amd64%20%7C%20arm64-2496ed" alt="Docker amd64 und arm64">
   <img src="https://img.shields.io/badge/SvelteKit-Svelte%205-ff3e00" alt="SvelteKit mit Svelte 5">
@@ -15,13 +15,13 @@
 
 | | |
 |---|---|
-| 📋 **Auftrag** | Großer Titel, nummerierte Schritte, Bilder und Links; Editor mit Formatierung. Schrift per **A− / A+** (bis 250 %) und Bilder in feinen Stufen vergrößern, Vollbild. Schritte als **Stunden- oder Selbstlern-Ziele** an alle, eine **Gruppe** oder einzelne Schüler senden (mit Rückgängig); Gruppen mit Name und Farbe bleiben gespeichert – danach zeigt jeder Schritt, wie viele ihn erledigt haben. Per **QR-Code teilen**: Handys öffnen den Auftrag ohne Anmeldung, nur zum Lesen. |
+| 📋 **Auftrag** | Großer Titel, nummerierte Schritte, Bilder und Links; Editor mit Formatierung. Schrift per **A− / A+** (bis 250 %) und Bilder in feinen Stufen vergrößern, Vollbild. Schritte als **Stunden- oder Selbstlern-Ziele** an alle, eine **Gruppe** oder einzelne Schüler senden (mit Rückgängig); Gruppen mit Name und Farbe bleiben gespeichert – danach zeigt jeder Schritt, wie viele ihn erledigt haben. Per **QR-Code teilen**: Handys öffnen den Auftrag ohne Anmeldung, nur zum Lesen – mit dem Zeitband der Stunde (Restzeit, Aufräumen, Losgehen). |
 | ⏱️ **Kopfband** | Zeitbalken in vier Phasen (Arbeitsphase · Aufräumen · Jetzt zurück in Raum 101 · Sofort zurück in Raum 101!), rechts immer „Zurück in Raum 101 um 22:38“, mit Viertelstunden-Strichen, Digitaluhr. Ohne laufende Stunde zeigt der Balken **„▶ Stunde starten · 45 min · bis 18:18 · Zimmer 101“** und „Anpassen…“. Im Menü startet eine Karte die Stunde mit den Reitern **Zeit · Raum · Aufräumen**: Dauer (15/30/45/90 min) oder eigene Zeiten, Raum aus einer eigenen Liste (oder kein Raumwechsel), Aufräumen-Phase in Minuten. Der **Wochenplan** im Menü legt pro Wochentag beliebig viele Stunden mit Raum fest (z. B. Mo 12:00–13:00 · Werkraum); die nächste Stunde von heute steht dann im Startbalken. Gestartet wird immer per Klick, die geplante Dauer läuft ab dem Klick. |
 | 🎯 **Stundenziele & Selbstlernen** | Eine Kachel pro Schüler, live aktualisiert, 20–30 Schüler ohne Scrollen. Jede Kachel zeigt das aktuelle Ziel und die Zeit seit dem letzten Abhaken – wer seit 15 min nichts abgehakt hat, wird gelb markiert. Schüler können **„Nur meine Kachel“** einschalten. |
 | 🚦 **Lautstärke-Ampel** | Misst über das Mikrofon des Lehrer-Geräts – nur im Browser, kein Ton wird gespeichert oder übertragen. Schüler sehen die Farbe. |
 | 📝 **Test-Modus** | Große Uhr, vergangene und verbleibende Zeit im Vollbild; läuft serverseitig weiter. |
 | 🎨 **Hintergründe** | 25 Verläufe, 26 Muster, 18 Fotos oder eigene Bilder – für alle festgelegt oder von jedem Schüler selbst gewählt. Hell- und Dunkelmodus. |
-| 👥 **Verwaltung** | Schüler und Lehrkräfte in Minuten angelegt; Schüler melden sich mit Kürzel oder „Vorname Nachname“ an. Mehrere Lehrkräfte: jede sieht nur ihre eigenen Schüler und hat ihren eigenen Auftrag, Ziele, Stunde und Wochenplan; einen Auftrag kann man an eine andere Lehrkraft kopieren oder übertragen. Der Admin kann sich per Knopf **als eine Lehrkraft oder ein Schüler anmelden** und sieht classRoom dann genau so (z. B. bei Problemen), „Zurück“ führt wieder zum eigenen Konto. |
+| 👥 **Verwaltung** | **Klassen** mit Name und Farbe; Schüler einzeln, als eingefügte Liste (ein Name pro Zeile, Kürzel automatisch) oder aus einer anderen Klasse hinzufügen, Zugangsdaten als Kärtchen drucken. Ein Schüler kann in mehreren Klassen sein, eine Klasse mehrere Lehrkräfte haben (Häkchen-Tabelle Lehrkraft × Klasse). Schüler melden sich mit Kürzel oder „Vorname Nachname“ an. Jede Lehrkraft sieht nur ihre Klassen und hat ihren eigenen Auftrag, Ziele, Stunde und Wochenplan; einen Auftrag kann man an eine andere Lehrkraft kopieren oder übertragen. Der Admin kann sich per Knopf **als eine Lehrkraft oder ein Schüler anmelden** und sieht classRoom dann genau so (z. B. bei Problemen), „Zurück“ führt wieder zum eigenen Konto. |
 
 <p align="center"><img src="assets/banner-2.png" alt="Stundenziele und Selbstlern-Modus" width="100%"></p>
 
@@ -32,7 +32,7 @@
 - Eine nummerierte Liste erscheint als Schritte mit Zahl im Kreis – auch von Hand getippte Zeilen mit „- “ oder „1. “ am Anfang; **Umschalt+Enter** gibt einem Schritt eine graue Zusatzzeile.
 - Bilder per Knopf, Strg+V oder Hineinziehen (irgendwo auf die Karte) – sie werden vor dem Hochladen verkleinert (höchstens 1920 px, einige hundert KB). Rechts als gleich zugeschnittene Vorschau, ein Klick zeigt das ganze Bild.
 - Links stehen klein unten in der Karte. Das HTML wird beim Speichern serverseitig bereinigt.
-- **Teilen per QR-Code** (Symbol neben A− / A+, standardmäßig aus): erzeugt einen zufälligen Link wie `/a/k7xq9mpzab`, gültig 1, 7 oder 30 Tage (Standard `SHARE_DAYS`). Der QR-Code erscheint groß in der Mitte (gut scannbar am Beamer), darunter der kurze Link zum Abtippen; auf Wunsch bleibt er klein unten rechts in der Karte. Die öffentliche Seite zeigt nur Titel, Text, Bilder und Links – keine Namen, Ziele oder Fortschritte –, folgt Hell/Dunkel des Geräts und lädt alle 30 s neu. „Neuer Link“ macht den alten ungültig, „Teilen beenden“ beendet ihn; Bilder gibt es nur mit gültigem Code. Ein gelöschter oder übertragener Auftrag ist nicht mehr geteilt. Im Menü unter **Anzeige → Geteilte Aufträge** sieht jede Lehrkraft ihre (der Admin alle) und kann verlängern oder beenden; dort steht auch, wenn die Adresse nur im Schulnetz erreichbar ist.
+- **Teilen per QR-Code** (Symbol neben A− / A+, standardmäßig aus): erzeugt einen zufälligen Link wie `/a/k7xq9mpzab`, gültig 1, 7 oder 30 Tage (Standard `SHARE_DAYS`). Der QR-Code erscheint groß in der Mitte (gut scannbar am Beamer), darunter der kurze Link zum Abtippen; auf Wunsch bleibt er klein unten rechts in der Karte. Die öffentliche Seite zeigt nur Titel, Text, Bilder und Links – keine Namen, Ziele, Fortschritte oder Klasse –, folgt Hell/Dunkel des Geräts und lädt alle 30 s neu. Oben steht das Zeitband der Stunde: Arbeitsphase mit Restzeit und „Zurück in … um …“, beim Aufräumen gelb-orange, zum Losgehen groß in Orange (auf dem Handy bildschirmfüllend, der Auftrag ist dann eingeklappt); ohne Stunde nur die Uhrzeit. „Neuer Link“ macht den alten ungültig, „Teilen beenden“ beendet ihn; Bilder gibt es nur mit gültigem Code. Ein gelöschter oder übertragener Auftrag ist nicht mehr geteilt. Im Menü unter **Anzeige → Geteilte Aufträge** sieht jede Lehrkraft ihre (der Admin alle) und kann verlängern oder beenden; dort steht auch, wenn die Adresse nur im Schulnetz erreichbar ist.
 - Leiste **Stundenziele** darunter: ein Quadrat pro Schüler, je mehr erledigt, desto grüner – sind alle fertig: „🎉 Alle Ziele erledigt“.
 
 **Stundenziele & Selbstlern-Modus**
@@ -47,8 +47,9 @@
 
 **Zugänge**
 - Das erste Lehrerkonto kommt aus der `.env` und ist **Admin**; sein Passwort wird bei jedem Start auf den `.env`-Wert gesetzt – so kommt man nach einem vergessenen Passwort wieder hinein.
-- **Admin** (unter *Lehrer verwalten*): legt Lehrkräfte an und löscht sie, setzt ihre Passwörter, macht weitere Lehrkräfte zum Admin und schaltet pro Lehrkraft „Sieht alle Schüler“ ein. Unter *Schüler verwalten* ordnet er jeden Schüler einer oder mehreren Lehrkräften zu.
-- **Lehrkräfte** sehen nur ihre eigenen Schüler (außer mit „Sieht alle Schüler“) und ändern unter *Mein Konto* nur ihr eigenes Passwort. Auftrag, Ziele, Stunde, Wochenplan, Räume, Gruppen, Test, Ampel und Hintergrund hat jede Lehrkraft für sich.
+- **Verwaltung** (Menü → *Klassen · Schüler · Lehrkräfte*): Klassen als Karten; eine Klasse öffnen zeigt ihre Schüler, rechts die Lehrkräfte und Sammel-Aktionen (Zugangsdaten drucken, Liste einfügen, alle Passwörter neu, archivieren). Archivierte Klassen verschwinden aus der Stunde und lassen sich wiederherstellen.
+- **Admin** sieht alle Klassen und Schüler, legt Lehrkräfte an, benennt sie um und löscht sie, setzt ihre Passwörter, macht weitere Lehrkräfte zum Admin und weist Lehrkräfte den Klassen zu.
+- **Lehrkräfte** sehen nur ihre Klassen und deren Schüler, legen eigene Klassen an und ändern unter *Mein Konto* nur ihr eigenes Passwort. Beim Starten einer Stunde wählen sie die Klasse (die zuletzt genutzte ist vorausgewählt); das Kopfband zeigt sie, Stundenziele und Kacheln gelten nur für diese Klasse, Selbstlern-Ziele über alle Klassen. Auftrag, Ziele, Stunde, Wochenplan, Räume, Gruppen, Test, Ampel und Hintergrund hat jede Lehrkraft für sich.
 - **Schüler mit mehreren Lehrkräften** sehen die Klasse der Lehrkraft, die zuletzt eine Stunde gestartet hat, und können im Menü unter *Lehrkraft* wechseln.
 - Schüler-Passwörter werden **nur einmal** angezeigt; „Neues Passwort“ meldet den Schüler überall ab.
 - Nach 5 falschen Passwörtern ist ein Benutzername 5 Minuten gesperrt.
@@ -87,7 +88,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Fertig – classRoom läuft unter **http://localhost:3000** (bzw. `http://<server-ip>:3000`). Mit dem Lehrerkonto anmelden und unter *Menü → Schüler verwalten* die Klasse anlegen.
+Fertig – classRoom läuft unter **http://localhost:3000** (bzw. `http://<server-ip>:3000`). Mit dem Lehrerkonto anmelden und unter *Menü → Klassen* die Schüler in „Meine Klasse“ eintragen oder weitere Klassen anlegen.
 
 > [!TIP]
 > Für die Lautstärke-Ampel braucht der Browser **HTTPS** (oder `localhost`). Im Schulnetz am einfachsten hinter einen Reverse Proxy wie Caddy oder Traefik stellen.
@@ -101,7 +102,7 @@ Alles steht in der `.env`; nach einer Änderung `docker compose up -d` ausführe
 | `TEACHER_USERNAME` | Benutzername des ersten Lehrerkontos (immer Admin) | `lehrer` |
 | `TEACHER_PASSWORD` | Passwort dazu – **muss gesetzt werden** (mind. 8 Zeichen) | – |
 | `PORT` | Port, unter dem classRoom erreichbar ist | `3000` |
-| `CLASSROOM_VERSION` | Image-Version, z. B. `0.3.7` | `latest` |
+| `CLASSROOM_VERSION` | Image-Version, z. B. `0.4.0` | `latest` |
 
 <details>
 <summary><b>Weitere Einstellungen</b></summary>
@@ -209,7 +210,7 @@ npm run dev                  # Entwicklung mit Hot-Reload
 npm run build && npm start   # Produktionsbuild
 ```
 
-**Release:** Version in `package.json` anheben, Abschnitt in `CHANGELOG.md` ergänzen, committen und einen Tag pushen (`git tag v0.3.7 && git push origin v0.3.7`). GitHub Actions baut dann das Image für amd64/arm64, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release mit dem Text aus dem CHANGELOG an. Dependabot hält npm-Pakete, Docker-Basis-Image und Actions aktuell.
+**Release:** Version in `package.json` anheben, Abschnitt in `CHANGELOG.md` ergänzen, committen und einen Tag pushen (`git tag v0.4.0 && git push origin v0.4.0`). GitHub Actions baut dann das Image für amd64/arm64, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release mit dem Text aus dem CHANGELOG an. Dependabot hält npm-Pakete, Docker-Basis-Image und Actions aktuell.
 
 </details>
 

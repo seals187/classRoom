@@ -64,3 +64,13 @@ export const formatDate = (d) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/$
 
 /** @param {Date} d */
 export const formatClock = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+
+/** So lange nach dem Ende gilt eine Stunde noch als laufend („Zeit um · +… min“), danach ist sie beendet. */
+export const OVERTIME_MS = 15 * 60000;
+
+/**
+ * Ist die Stunde vorbei (Ende plus 15 min Überzug)? Dann zeigen Kopfband und Menü wieder „Stunde starten“.
+ * @param {{ end: Date | null }} span aus lessonSpan
+ * @param {Date} now
+ */
+export const lessonEnded = (span, now) => !!span.end && now.getTime() >= span.end.getTime() + OVERTIME_MS;

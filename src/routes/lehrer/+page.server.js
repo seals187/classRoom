@@ -1,7 +1,6 @@
-import { listTeachers } from '#lib/server/auth.js';
+import { redirect } from '@sveltejs/kit';
 
-// Admin: alle Lehrkräfte. Sonst nur das eigene Konto (Passwort ändern).
-export function load({ locals }) {
-	const all = listTeachers();
-	return { teachers: locals.user?.isAdmin ? all : all.filter((t) => t.id === locals.user?.id) };
+// Seit den Klassen: Verwaltung mit Reitern.
+export function load() {
+	redirect(308, '/verwaltung?tab=lehrer');
 }
