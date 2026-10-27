@@ -81,6 +81,8 @@
 	let imageSize = $state(30);
 	// Smartphone (Bilder über dem Text): Breite einer Vorschau in % – 15 → 13.5 %, 30 → 27 %, 50 → ganze Breite.
 	const thumbWidth = $derived(imageSize <= 30 ? imageSize * 0.9 : 27 + (imageSize - 30) * 3.65);
+	// Geteilte Seite auf dem Handy: Standard ganze Breite (Bilder − macht sie kleiner).
+	const plainThumb = $derived(Math.min(100, 35 + (imageSize - 15) * (65 / 15)));
 	/** @type {HTMLElement | undefined} */
 	let sectionEl = $state();
 	let fullscreen = $state(false);
@@ -462,15 +464,16 @@
 	ondragleave={onDragLeave}
 	ondragover={onDragOver}
 	ondrop={onDrop}
-	style:--scale={editing ? 1 : plain ? null : scale}
+	style:--scale={editing || plain ? null : scale}
+	style:--user-scale={plain ? scale : null}
 	style:--image-col={editing ? null : `${imageSize}%`}
-	style:--thumb={editing ? null : `${thumbWidth}%`}
+	style:--thumb={editing ? null : `${plain ? plainThumb : thumbWidth}%`}
 	bind:this={sectionEl}
 >
 	<!-- Über die ganze Breite: Knöpfe bleiben fix, auch wenn die Bilder größer werden. -->
 	<header>
 		<span class="label">{editing ? 'Auftrag bearbeiten' : 'Auftrag'}</span>
-		{#if !editing && !plain}
+		{#if !editing}
 			<div class="tools">
 				{#if canEdit && stepTexts.length > 0}
 					<button class="tool accent" onclick={() => (goalsOpen = true)} title="Die Schritte als Ziele an die Schüler senden">
@@ -800,9 +803,9 @@
 		color: var(--lesson-accent);
 	}
 
-	/* Geteilte Seite: etwas kleiner als am Beamer (dort A− / A+). */
+	/* Geteilte Seite: etwas kleiner als am Beamer; A− / A+ wirken über --user-scale. */
 	.assignment.plain {
-		--scale: 0.76;
+		--scale: calc(0.76 * var(--user-scale, 1));
 	}
 
 	/* Auftrag ist geteilt */
@@ -1345,7 +1348,6 @@
 		.assignment.plain .media,
 		.assignment.plain .media.multi {
 			order: 0;
-			grid-template-columns: minmax(0, 1fr);
 		}
 
 		.assignment.plain .media .zoom-btn img {
@@ -1362,7 +1364,7 @@
 
 		/* Geteilte Seite: ohne Kartenrahmen, ganze Breite. */
 		.assignment.plain {
-			--scale: 1;
+			--scale: var(--user-scale, 1);
 			padding: 4px 0 0;
 			border: 0;
 			background: transparent;

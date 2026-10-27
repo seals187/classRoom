@@ -2,6 +2,20 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [0.4.1] – 2026-10-28
+
+### Neu
+- **Test-Schüler:** Der Admin kann beim Hinzufügen (Reiter „Einzeln“) oder unter „Bearbeiten“ einen Schüler als Test-Schüler markieren – zum Ausprobieren der Schüler-Sicht. Ihn sieht nur der Admin; andere Lehrkräfte sehen ihn nirgends, auch nicht in gemeinsamen Klassen (Listen, Zähler, Kacheln, „Ziele an alle“, „Alle Passwörter neu“). In den Listen trägt er das Etikett „Test“
+
+### Geändert
+- **Geteilte Seite (QR-Code):** Schrift (A− / A+) und Bilder (− / +) lassen sich wieder vergrößern und verkleinern, dazu Vollbild – pro Gerät gespeichert. Auf dem Handy sind die Bilder anfangs so breit wie der Bildschirm
+- **Menü passt ohne Scrollen** (1280×720): Die Stunden-Karte ist kompakter – Restzeit links, Zeiten, Raum und Klasse (direkt wählbar) rechts; Beginn und Ende erscheinen erst mit „Eigene“ in derselben Zeile statt der Minuten; „Wochenplan“ steht als Link neben der Überschrift. Mit dem Pfeil bei „Stunde läuft“ lässt sich die Karte ganz einklappen (pro Gerät gemerkt)
+- **„Seit … nichts abgehakt“ nur während einer Stunde:** Die Zeit auf den Kacheln (bis „> 1 Tag“), die gelbe Markierung und der Hinweis „15+ min“ erscheinen bei Stundenzielen und Selbstlernen nur, solange eine Stunde läuft – und zählen frühestens ab Stundenbeginn
+- **Kopfband bleibt gleich hoch** – ohne Stunde, laufend, beim Aufräumen, Losgehen und „Zeit um“; nichts springt mehr beim Starten oder Beenden einer Stunde (Desktop und Handy)
+
+### Behoben
+- **„⋯“-Menü in der letzten Tabellenzeile** (z. B. bei der unteren von zwei Lehrkräften) wurde vom Tabellenrand abgeschnitten. Es liegt jetzt über allem und klappt nach oben auf, wenn unten kein Platz ist
+
 ## [0.4.0] – 2026-10-27
 
 ### Neu
@@ -208,6 +222,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.4.1]: https://github.com/seals187/classRoom/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/seals187/classRoom/compare/v0.3.7...v0.4.0
 [0.3.7]: https://github.com/seals187/classRoom/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/seals187/classRoom/compare/v0.3.5...v0.3.6

@@ -3,6 +3,7 @@
 	import { autoRefresh } from '#lib/refresh.js';
 	import { page } from '$app/state';
 	import { clock } from '#lib/clock.svelte.js';
+	import { lessonEnded, lessonSpan } from '#lib/time.js';
 	import { ui } from '#lib/ui.svelte.js';
 	import StudentTile from './StudentTile.svelte';
 
@@ -21,6 +22,16 @@
 
 	const STORAGE_KEY = 'goalsExpanded';
 	const STALE_MINUTES = 15;
+
+	// „seit … nichts abgehakt“ zählt nur, solange eine Stunde läuft – und frühestens ab ihrem Beginn.
+	const lessonStart = $derived.by(() => {
+		const s = page.data.settings;
+		const now = clock.now;
+		if (!s?.returnTime || !now) return null;
+		const span = lessonSpan(s.startTime, s.returnTime, now);
+		if (!span.end || lessonEnded(span, now) || (span.start && span.start > now)) return null;
+		return span.start?.getTime() ?? now.getTime();
+	});
 	const GAP = 10;
 	// Spalten: mindestens 180px breit, auf schmalen Bildschirmen immer 2.
 	const MIN_TILE = 180;
@@ -107,7 +118,7 @@
 			{@render title()}
 		</h1>
 		<div class="controls">
-			{#if students.length > 0}
+			{#if students.length > 0 && lessonStart !== null}
 				<span class="legend"><span class="legend-dot" aria-hidden="true"></span>{STALE_MINUTES}+ min nichts abgehakt</span>
 			{/if}
 			{#if isTeacher && students.length > 0}
@@ -144,7 +155,8 @@
 				own
 				open={isOpen(ownStudent.id)}
 				onopenchange={(open) => (overrides[ownStudent.id] = open)}
-				now={clock.now}
+				now={lessonStart === null ? null : clock.now}
+				{lessonStart}
 				staleMinutes={STALE_MINUTES}
 			/>
 			<p class="focus-hint">
@@ -163,7 +175,8 @@
 							own={student.id === ownId}
 							open={isOpen(student.id)}
 							onopenchange={(open) => (overrides[student.id] = open)}
-							now={clock.now}
+							now={lessonStart === null ? null : clock.now}
+							{lessonStart}
 							staleMinutes={STALE_MINUTES}
 						/>
 					{/each}

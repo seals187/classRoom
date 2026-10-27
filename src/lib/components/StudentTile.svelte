@@ -15,7 +15,8 @@
 	 *   open?: boolean,
 	 *   onopenchange?: (open: boolean) => void,
 	 *   now?: Date | null,
-	 *   staleMinutes?: number
+	 *   staleMinutes?: number,
+	 *   lessonStart?: number | null
 	 * }}
 	 */
 	let {
@@ -26,7 +27,8 @@
 		open = false,
 		onopenchange,
 		now = null,
-		staleMinutes = 15
+		staleMinutes = 15,
+		lessonStart = null
 	} = $props();
 
 	let editing = $state(false);
@@ -40,9 +42,9 @@
 	const current = $derived(student.goals.find((g) => !g.done) ?? null);
 	const expanded = $derived(open || editing);
 
-	const minutes = $derived(
-		now && student.activeAt !== null ? Math.max(0, Math.floor((now.getTime() - student.activeAt) / 60000)) : null
-	);
+	// Ab dem letzten Abhaken, aber frühestens ab Stundenbeginn (ohne Stunde gibt GoalBoard kein `now`).
+	const since0 = $derived(student.activeAt === null ? null : Math.max(student.activeAt, lessonStart ?? 0));
+	const minutes = $derived(now && since0 !== null ? Math.max(0, Math.floor((now.getTime() - since0) / 60000)) : null);
 	const stale = $derived(!complete && total > 0 && minutes !== null && minutes >= staleMinutes);
 
 	const shortName = $derived(`${student.firstName} ${student.lastName.charAt(0)}.`);

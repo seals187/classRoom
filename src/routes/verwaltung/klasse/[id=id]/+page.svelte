@@ -146,7 +146,7 @@
 				{@const stats = data.goalStats[s.id]}
 				<div class="row">
 					<Avatar id={s.id} name="{s.firstName} {s.lastName}" />
-					<span class="who"><strong>{s.firstName} {s.lastName}</strong><code>{s.username ?? 'kein Zugang'}</code></span>
+					<span class="who"><strong>{s.firstName} {s.lastName}{#if s.isTest}<span class="testtag" title="Test-Schüler – sieht nur der Admin">Test</span>{/if}</strong><code>{s.username ?? 'kein Zugang'}</code></span>
 					<span class="num">◎ {(stats?.lesson ?? EMPTY).done}/{(stats?.lesson ?? EMPTY).total}</span>
 					<span class="num">📖 {(stats?.self ?? EMPTY).done}/{(stats?.self ?? EMPTY).total}</span>
 					<span class="actions">
@@ -354,6 +354,18 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	/* Test-Schüler (nur für den Admin sichtbar) */
+	.testtag {
+		margin-left: 8px;
+		padding: 1px 7px;
+		border-radius: 999px;
+		background: var(--warn-soft);
+		color: var(--warn);
+		font-size: 0.72rem;
+		font-weight: 700;
+		vertical-align: middle;
 	}
 
 	.who code,

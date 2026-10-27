@@ -1,6 +1,7 @@
 <script>
 	import { untrack } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import { api } from '#lib/api.js';
 	import Modal from '../Modal.svelte';
 
@@ -8,7 +9,7 @@
 	 * Name, Kürzel und Klassen eines Schülers ändern.
 	 * @type {{
 	 *   open: boolean,
-	 *   student: { id: number, firstName: string, lastName: string, username: string | null } | null,
+	 *   student: { id: number, firstName: string, lastName: string, username: string | null, isTest?: boolean } | null,
 	 *   classes: { id: number, name: string, color: string }[],
 	 *   classIds: number[]
 	 * }}
@@ -20,6 +21,9 @@
 	let username = $state('');
 	/** @type {number[]} */
 	let chosen = $state([]);
+	// Test-Schüler: nur der Admin sieht und ändert das.
+	let isTest = $state(false);
+	const isAdmin = $derived(!!page.data.user?.isAdmin);
 	let busy = $state(false);
 	let error = $state('');
 
@@ -29,6 +33,7 @@
 			firstName = student.firstName;
 			lastName = student.lastName;
 			username = student.username ?? '';
+			isTest = !!student.isTest;
 			chosen = classIds.filter((id) => classes.some((c) => c.id === id));
 			error = '';
 		});
@@ -44,7 +49,8 @@
 			await api(`/api/students/${student.id}`, 'PATCH', {
 				firstName,
 				lastName,
-				...(student.username && username !== student.username && { username })
+				...(student.username && username !== student.username && { username }),
+				...(isAdmin && isTest !== !!student.isTest && { isTest })
 			});
 			for (const c of classes) {
 				const was = classIds.includes(c.id);
@@ -80,6 +86,12 @@
 					</label>
 				{/each}
 			</div>
+		{/if}
+		{#if isAdmin}
+			<label class="test">
+				<input type="checkbox" bind:checked={isTest} />
+				🧪 Test-Schüler – sieht nur der Admin, keine andere Lehrkraft
+			</label>
 		{/if}
 		{#if error}<p class="error">{error}</p>{/if}
 	</form>
@@ -155,6 +167,15 @@
 		width: 9px;
 		height: 9px;
 		border-radius: 50%;
+	}
+
+	label.test {
+		flex-direction: row;
+		align-items: center;
+		gap: 8px;
+		color: var(--text);
+		font-size: 0.9rem;
+		cursor: pointer;
 	}
 
 	.error {

@@ -160,7 +160,7 @@
 </script>
 
 <!-- Verwaltung zeigt keinen Zeitbalken – dann auch nicht rot/orange leuchten. -->
-<header class="band" class:go={status === 'go' && !isAdmin} class:over={status === 'over' && !isAdmin}>
+<header class="band" class:fixed={!isAdmin} class:go={status === 'go' && !isAdmin} class:over={status === 'over' && !isAdmin}>
 	<button
 		class="menu-btn"
 		class:open={menuOpen}
@@ -317,6 +317,14 @@
 		border-radius: var(--radius);
 		background: var(--surface);
 		box-shadow: var(--shadow);
+	}
+
+	/* Immer gleich hoch – ohne Stunde, laufend, mit Viertelstunden, Losgehen: nichts springt beim Starten/Beenden. */
+	@media (min-width: 761px) {
+		.band.fixed {
+			box-sizing: border-box;
+			height: 110px;
+		}
 	}
 
 	/* Losgehen: kräftiger oranger Rand, pulsiert gut sichtbar (Schein + Tönung). Zeit um: roter Rand. */
@@ -851,6 +859,12 @@
 		.time {
 			order: 5;
 			flex-basis: 100%;
+		}
+
+		/* Gleich hoch mit und ohne Stunde (ohne Stunde bricht der Startbalken zweizeilig um). */
+		.band.fixed .time {
+			min-height: 95px;
+			justify-content: center;
 		}
 
 		/* Schmal: Start links, „Anpassen…“ rechts, Infos darunter */

@@ -98,6 +98,24 @@
 	const classes = $derived(/** @type {{ id: number, name: string, color: string }[]} */ (page.data.classes ?? []));
 	let classChoice = $state(0);
 	const chosenClass = $derived(classes.find((c) => c.id === classChoice) ?? null);
+
+	// Stunden-Karte einklappen (pro Gerät gemerkt) und Beginn/Ende erst auf Wunsch zeigen – passt in 1280×720.
+	const COLLAPSED_KEY = 'menuLessonCollapsed';
+	let collapsed = $state(false);
+	let showTimes = $state(false);
+	try {
+		collapsed = typeof localStorage !== 'undefined' && localStorage.getItem(COLLAPSED_KEY) === '1';
+	} catch {
+		// Kein localStorage – ausgeklappt.
+	}
+	function toggleCollapsed() {
+		collapsed = !collapsed;
+		try {
+			localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0');
+		} catch {
+			// Gilt dann nur bis zum Neuladen.
+		}
+	}
 	const from = $derived(begin || hhmm(clock.now ?? new Date()));
 	const to = $derived(end || addMinutes(from, chosen));
 	// Laufende Stunde: Minuten bis zum (evtl. verlängerten) Ende, negativ = überzogen.
@@ -124,6 +142,7 @@
 		if (open) return;
 		view = 'main';
 		tab = 'zeit';
+		showTimes = false;
 		message = '';
 		addingRoom = false;
 	});
@@ -380,33 +399,47 @@
 
 			{#if isTeacher}
 				<section class="lesson">
-					<h3 class="group status" class:live={running}>
-						<span class="status-dot" aria-hidden="true"></span>
-						{running ? 'Stunde läuft' : 'Keine Stunde aktiv'}
-					</h3>
+					<!-- Überschrift klappt die Karte ein/aus (pro Gerät gemerkt) – so passt das Menü ohne Scrollen. -->
+					<div class="lesson-head">
+						<button class="group status" class:live={running} aria-expanded={!collapsed} onclick={toggleCollapsed}>
+							<span class="status-dot" aria-hidden="true"></span>
+							{running ? 'Stunde läuft' : 'Keine Stunde aktiv'}
+							<span class="fold" class:shut={collapsed} aria-hidden="true"><Icon name="chevron" size={14} /></span>
+						</button>
+						<!-- Wochenplan als kleiner Link in derselben Zeile – spart eine ganze Menüzeile. -->
+						<button class="plan-link" onclick={openPlan} title={schedule.length ? `${schedule.length} Stunden geplant` : 'Noch nichts geplant'}>
+							<Icon name="calendar" size={14} /> Wochenplan
+						</button>
+					</div>
 
-					<div class="card">
+					<div class="card" class:collapsed>
 						<div class="summary">
-							<span class="kicker">{running ? (left >= 0 ? 'Noch' : 'Überzogen') : 'Nächste Stunde'}</span>
-							<strong class="big">
-								{running ? `${left >= 0 ? '' : '+'}${Math.abs(left)} min` : `${minutesBetween(from, to)} min`}
-							</strong>
+							<span class="left-col">
+								<span class="kicker">{running ? (left >= 0 ? 'Noch' : 'Überzogen') : 'Nächste Stunde'}</span>
+								<strong class="big">
+									{running ? `${left >= 0 ? '' : '+'}${Math.abs(left)} min` : `${minutesBetween(from, to)} min`}
+								</strong>
+							</span>
 							<span class="meta">
-								{from} – {to} ·
-								{#if roomChoice}<Icon name="door" size={14} /> {roomChoice}{:else}nur Ende{/if}
-								{#if chosenClass}· <span class="kdot" style:background={chosenClass.color}></span>{chosenClass.name}{/if}
+								<span>{from} – {to}</span>
+								<span>
+									{#if roomChoice}<Icon name="door" size={13} /> {roomChoice}{:else}nur Ende{/if}
+								</span>
+								<span>
+									{#if chosenClass}
+										<span class="kdot" style:background={chosenClass.color}></span>
+										<!-- Klasse direkt hier wählen (keine eigene Zeile in der Karte) -->
+										{#if classes.length > 1}
+											<select class="class-pick" bind:value={classChoice} aria-label="Klasse der Stunde">
+												{#each classes as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+											</select>
+										{:else}{chosenClass.name}{/if}
+									{/if}
+								</span>
 							</span>
 						</div>
 
-						{#if classes.length > 1}
-							<label class="classes">
-								<span class="kdot" style:background={chosenClass?.color ?? 'transparent'}></span>
-								Klasse
-								<select bind:value={classChoice} aria-label="Klasse der Stunde">
-									{#each classes as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
-								</select>
-							</label>
-						{/if}
+						{#if !collapsed}
 
 						<div class="tabs" role="tablist">
 							<button role="tab" aria-selected={tab === 'zeit'} class:on={tab === 'zeit'} onclick={() => (tab = 'zeit')}>Zeit</button>
@@ -418,40 +451,44 @@
 
 						{#if tab === 'zeit'}
 							<div class="panel">
-								{#if running}
+								{#if !running && today.length > 0 && !showTimes}
+									<div class="slots" aria-label="Heute laut Wochenplan">
+										{#each today as slot, i (i)}
+											<button class:on={begin === slot.start && end === slot.end} onclick={() => pick(slot)}>
+												{slot.start}–{slot.end}{#if slot.room}<small>{slot.room}</small>{/if}
+											</button>
+										{/each}
+									</div>
+								{/if}
+								<!-- „Eigene“: Beginn und Ende ersetzen die Chips in derselben Zeile – die Karte wird nicht höher. -->
+								{#if showTimes}
+									<div class="times">
+										<label>
+											Beginn
+											<input type="time" value={from} oninput={(e) => (begin = e.currentTarget.value)} />
+										</label>
+										<label>
+											Ende
+											<input type="time" value={to} oninput={(e) => (end = e.currentTarget.value)} />
+										</label>
+										<button class="times-close" title="Zurück zu den Minuten" aria-label="Zurück zu den Minuten" onclick={() => (showTimes = false)}>
+											<Icon name="close" size={12} />
+										</button>
+									</div>
+								{:else if running}
 									<div class="chips" aria-label="Verlängern">
 										{#each EXTEND as m (m)}
 											<button onclick={() => extend(m)} title="Ende um {m} min nach hinten schieben">+{m}</button>
 										{/each}
+										<button class="own" title="Beginn und Ende selbst eingeben" onclick={() => (showTimes = true)}>Eigene</button>
 									</div>
 								{:else}
-									{#if today.length > 0}
-										<div class="slots" aria-label="Heute laut Wochenplan">
-											{#each today as slot, i (i)}
-												<button class:on={begin === slot.start && end === slot.end} onclick={() => pick(slot)}>
-													{slot.start}–{slot.end}{#if slot.room}<small>{slot.room}</small>{/if}
-												</button>
-											{/each}
-										</div>
-									{/if}
 									<div class="chips" aria-label="Dauer in Minuten">
 										{#each chips as m (m)}
 											<button class:on={!end && chosen === m} onclick={() => choose(m)}>{m}</button>
 										{/each}
+										<button class="own" title="Beginn und Ende selbst eingeben" onclick={() => (showTimes = true)}>Eigene</button>
 									</div>
-								{/if}
-								<div class="times">
-									<label>
-										Beginn
-										<input type="time" value={from} oninput={(e) => (begin = e.currentTarget.value)} />
-									</label>
-									<label>
-										Ende
-										<input type="time" value={to} oninput={(e) => (end = e.currentTarget.value)} />
-									</label>
-								</div>
-								{#if !running}
-									<p class="hint">Läuft ab dem Klick {minutesBetween(from, to)} min.</p>
 								{/if}
 							</div>
 						{:else if tab === 'raum'}
@@ -491,21 +528,18 @@
 								</div>
 							</div>
 						{/if}
-
-						<button class="primary go" onclick={startLesson} disabled={saving}>
-							{#if running}Stunde aktualisieren{:else}▶ Stunde starten{/if}
-						</button>
-						{#if running}
-							<button class="text-link" onclick={stopLesson} disabled={saving}>Stunde beenden</button>
 						{/if}
+
+						<div class="actions-row">
+							<button class="primary go" onclick={startLesson} disabled={saving}>
+								{#if running}{collapsed ? 'Aktualisieren' : 'Stunde aktualisieren'}{:else}▶ Stunde starten{/if}
+							</button>
+							{#if running}
+								<button class="text-link" onclick={stopLesson} disabled={saving}>Beenden</button>
+							{/if}
+						</div>
 						{#if message}<p class="message">{message}</p>{/if}
 					</div>
-					<button class="row" onclick={openPlan}>
-						<Icon name="calendar" size={18} />
-						Wochenplan
-						<span class="value">{schedule.length ? `${schedule.length} Stunden` : 'leer'}</span>
-						<Icon name="chevron" size={16} />
-					</button>
 				</section>
 			{:else if teachers.length > 1}
 				<section class="display">
@@ -728,8 +762,8 @@
 		overflow-y: auto;
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
-		padding: 14px 16px;
+		gap: 6px;
+		padding: 12px 16px;
 		background: var(--surface);
 		box-shadow: 4px 0 24px rgb(20 30 60 / 15%);
 		font-size: 0.92rem;
@@ -764,7 +798,7 @@
 
 	/* Gruppen-Überschrift: klein, grau, Großbuchstaben */
 	.group {
-		margin: 8px 10px 2px;
+		margin: 6px 10px 1px;
 		color: var(--muted);
 		font-size: 0.72rem;
 		font-weight: 700;
@@ -786,7 +820,7 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		padding: 5px 10px;
+		padding: 4px 10px;
 		border-radius: 8px;
 		color: var(--text);
 		text-decoration: none;
@@ -816,6 +850,12 @@
 		align-items: center;
 		gap: 6px;
 		margin-top: 0;
+		width: calc(100% - 20px);
+		padding: 0;
+		border: 0;
+		background: none;
+		text-align: left;
+		cursor: pointer;
 	}
 
 	.status-dot {
@@ -827,6 +867,18 @@
 
 	.status.live {
 		color: var(--ok);
+	}
+
+	.fold {
+		display: inline-flex;
+		margin-left: auto;
+		color: var(--muted);
+		transform: rotate(90deg);
+		transition: transform 0.15s;
+	}
+
+	.fold.shut {
+		transform: none;
 	}
 
 	.status.live .status-dot {
@@ -843,8 +895,8 @@
 	.card {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
-		padding: 10px 12px 12px;
+		gap: 7px;
+		padding: 9px 12px 10px;
 		border: 1px solid var(--border);
 		border-radius: 14px;
 		background: var(--bg);
@@ -852,9 +904,16 @@
 
 	.summary {
 		display: flex;
-		flex-direction: column;
 		align-items: center;
-		text-align: center;
+		justify-content: space-between;
+		gap: 10px;
+	}
+
+	.left-col {
+		flex-shrink: 0;
+		display: flex;
+		flex-direction: column;
+		white-space: nowrap;
 	}
 
 	.kicker {
@@ -863,16 +922,18 @@
 	}
 
 	.big {
-		font-size: 1.6rem;
+		font-size: 1.45rem;
 		font-weight: 800;
 		line-height: 1.15;
 		font-variant-numeric: tabular-nums;
 	}
 
 	.meta {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 2px;
+		text-align: right;
 		color: var(--muted);
 		font-size: 0.8rem;
 		font-variant-numeric: tabular-nums;
@@ -925,18 +986,18 @@
 	/* Klasse der Stunde */
 	.classes {
 		display: flex;
+		flex-direction: row;
 		align-items: center;
 		gap: 8px;
 		color: var(--muted);
 		font-size: 0.85rem;
 	}
 
-	.classes select {
-		flex: 1;
-		min-width: 0;
-		padding: 5px 8px;
+	.class-pick {
+		max-width: 9.5em;
+		padding: 1px 4px;
 		border: 1px solid var(--border);
-		border-radius: 8px;
+		border-radius: 6px;
 		background: var(--surface);
 		color: var(--text);
 		font: inherit;
@@ -951,6 +1012,10 @@
 		vertical-align: baseline;
 	}
 
+	.drawer .chips button.own {
+		font-size: 0.8rem;
+	}
+
 	.drawer .chips button.on {
 		border-color: var(--accent);
 		background: var(--accent);
@@ -959,8 +1024,31 @@
 
 	.times {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: 1fr 1fr auto;
+		align-items: center;
 		gap: 8px;
+	}
+
+	/* Beginn und Ende je mit Beschriftung links – eine Zeile */
+	.times label {
+		flex-direction: row;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.times input {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.drawer .times-close {
+		display: grid;
+		place-items: center;
+		width: 26px;
+		height: 26px;
+		padding: 0;
+		border-radius: 7px;
+		color: var(--muted);
 	}
 
 	label {
@@ -1099,9 +1187,48 @@
 		color: inherit;
 	}
 
-	.lesson > .row {
-		width: 100%;
-		margin-top: 6px;
+	/* Überschrift „Stunde läuft ⌄“ links, „Wochenplan ›“ rechts */
+	.lesson-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+	}
+
+	.lesson-head .status {
+		width: auto;
+		flex: 0 0 auto;
+		margin-right: 0;
+		white-space: nowrap;
+		letter-spacing: 0.05em;
+	}
+
+	.lesson-head .status-dot {
+		flex-shrink: 0;
+	}
+
+	/* Pfeil direkt hinter dem Text (nicht ganz rechts) */
+	.lesson-head .fold {
+		flex-shrink: 0;
+		margin-left: 2px;
+	}
+
+	.drawer .plan-link {
+		display: inline-flex;
+		flex: 0 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		margin-left: auto;
+		white-space: nowrap;
+		align-items: center;
+		gap: 5px;
+		margin: 6px 2px 1px auto;
+		padding: 0;
+		border: 0;
+		background: none;
+		color: var(--accent);
+		font-size: 0.8rem;
+		font-weight: 600;
 	}
 
 	/* Wochenplan: Wochentage als Reiter, darunter je Stunde Beginn – Ende ✕ und Raum */
@@ -1161,6 +1288,16 @@
 		margin: 0;
 		color: var(--muted);
 		font-size: 0.82rem;
+	}
+
+	.actions-row {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+
+	.actions-row .go {
+		flex: 1;
 	}
 
 	.drawer .go {
@@ -1399,8 +1536,8 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		margin: auto -16px -14px;
-		padding: 10px 16px;
+		margin: auto -16px -12px;
+		padding: 7px 16px;
 		border-top: 1px solid var(--border);
 	}
 
@@ -1408,8 +1545,8 @@
 		display: grid;
 		place-items: center;
 		flex-shrink: 0;
-		width: 36px;
-		height: 36px;
+		width: 30px;
+		height: 30px;
 		border-radius: 50%;
 		background: var(--accent-soft);
 		color: var(--accent);

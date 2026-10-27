@@ -1,6 +1,7 @@
 <script>
 	import { untrack } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import { api } from '#lib/api.js';
 	import { suggestUsername } from '#lib/username.js';
 	import Avatar from '../Avatar.svelte';
@@ -23,6 +24,9 @@
 	let firstName = $state('');
 	let lastName = $state('');
 	let customUsername = $state('');
+	// Test-Schüler sieht nur der Admin (nur er kann ihn anlegen).
+	let isTest = $state(false);
+	const isAdmin = $derived(!!page.data.user?.isAdmin);
 	let text = $state('');
 	let fromClass = $state(0);
 	/** @type {number[]} */
@@ -34,6 +38,7 @@
 		if (!open) return;
 		untrack(() => {
 			firstName = lastName = customUsername = text = '';
+			isTest = false;
 			picked = [];
 			error = '';
 			fromClass = others[0]?.id ?? 0;
@@ -110,7 +115,7 @@
 			}
 			const students =
 				tab === 'single'
-					? [{ firstName, lastName, username: customUsername.trim() || suggested }]
+					? [{ firstName, lastName, username: customUsername.trim() || suggested, ...(isAdmin && isTest && { isTest: true }) }]
 					: valid.map(({ firstName, lastName, username }) => ({ firstName, lastName, username }));
 			const results = await api('/api/students', 'POST', { classId: klass.id, students });
 			await invalidateAll();
@@ -142,6 +147,12 @@
 				<input type="text" class="mono" bind:value={customUsername} placeholder={suggested || 'automatisch'} maxlength="40" />
 			</label>
 		</div>
+		{#if isAdmin}
+			<label class="test">
+				<input type="checkbox" bind:checked={isTest} />
+				🧪 Test-Schüler – sieht nur der Admin, keine andere Lehrkraft
+			</label>
+		{/if}
 	{:else if tab === 'list'}
 		<div class="list">
 			<label class="paste">
@@ -250,6 +261,16 @@
 		display: grid;
 		grid-template-columns: 1fr 1fr 0.8fr;
 		gap: 12px;
+	}
+
+	label.test {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-top: 14px;
+		color: var(--text);
+		font-size: 0.9rem;
+		cursor: pointer;
 	}
 
 	.single label {

@@ -20,9 +20,13 @@ export const CLASS_COLORS = ['#3b6fe0', '#f08a3c', '#8b5cd6', '#2f9e64', '#e0484
 /** Sichtbarkeit (student_teachers) aus den Klassen neu berechnen; „zuletzt abgehakt“ bleibt erhalten. */
 export function syncVisibility() {
 	const db = getDb();
+	// Test-Schüler sieht nur der Admin.
 	const pairs = `SELECT DISTINCT cs.student_id, ct.teacher_id FROM class_students cs
 		JOIN class_teachers ct ON ct.class_id = cs.class_id
-		JOIN classes c ON c.id = cs.class_id WHERE c.archived = 0`;
+		JOIN classes c ON c.id = cs.class_id
+		JOIN students s ON s.id = cs.student_id
+		JOIN users t ON t.id = ct.teacher_id
+		WHERE c.archived = 0 AND (s.is_test = 0 OR t.is_admin = 1)`;
 	db.transaction(() => {
 		db.prepare(`DELETE FROM student_teachers WHERE (student_id, teacher_id) NOT IN (${pairs})`).run();
 		db.prepare(`INSERT OR IGNORE INTO student_teachers (student_id, teacher_id) ${pairs}`).run();
@@ -94,9 +98,10 @@ export function listClasses(viewer, { archived = false } = {}) {
 			.prepare(
 				`SELECT cs.class_id AS classId, s.id, s.first_name AS firstName, s.last_name AS lastName
 				 FROM class_students cs JOIN students s ON s.id = cs.student_id
+				 WHERE ? OR s.is_test = 0
 				 ORDER BY s.first_name COLLATE NOCASE, s.last_name COLLATE NOCASE`
 			)
-			.all()
+			.all(viewer.isAdmin ? 1 : 0)
 	);
 	const teachers = /** @type {{ classId: number, id: number, username: string }[]} */ (
 		db
@@ -223,16 +228,17 @@ export function studentClassIds() {
 /**
  * Neue Passwörter für alle Schüler der Klasse (zum Drucken). Wer noch keinen Zugang hat, bekommt einen.
  * @param {number} classId
+ * @param {Viewer} viewer ohne Admin-Recht ohne Test-Schüler
  */
-export function resetClassPasswords(classId) {
+export function resetClassPasswords(classId, viewer) {
 	const students = /** @type {{ id: number, firstName: string, lastName: string }[]} */ (
 		getDb()
 			.prepare(
 				`SELECT s.id, s.first_name AS firstName, s.last_name AS lastName FROM class_students cs
-				 JOIN students s ON s.id = cs.student_id WHERE cs.class_id = ?
+				 JOIN students s ON s.id = cs.student_id WHERE cs.class_id = ? AND (? OR s.is_test = 0)
 				 ORDER BY s.first_name COLLATE NOCASE, s.last_name COLLATE NOCASE`
 			)
-			.all(classId)
+			.all(classId, viewer.isAdmin ? 1 : 0)
 	);
 	return getDb().transaction(() =>
 		students.map((s) => ({ name: `${s.firstName} ${s.lastName}`, ...resetStudentPassword(s.id) }))

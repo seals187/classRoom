@@ -4,7 +4,7 @@ import { getConfig } from './config.js';
 import { deleteFilesIfUnused } from './assignment.js';
 import { assertUsernameFree, canSeeStudent, claimOrphans, getDb, getGoalOwner, normalizeUsername } from './db.js';
 import { hashPassword, verifyPassword } from './password.js';
-import { activeClass } from './classes.js';
+import { activeClass, syncVisibility } from './classes.js';
 
 export const SESSION_COOKIE = 'classroom_session';
 
@@ -387,6 +387,8 @@ export function setTeacherRights(id, input, currentUserId) {
 	if (input.isAdmin !== undefined) {
 		if (id === currentUserId && input.isAdmin !== true) error(400, 'Du kannst dir das Admin-Recht nicht selbst nehmen');
 		db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(input.isAdmin === true ? 1 : 0, id);
+		// Test-Schüler sieht nur der Admin.
+		syncVisibility();
 	}
 }
 

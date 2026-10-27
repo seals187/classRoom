@@ -1,7 +1,7 @@
 <p align="center"><img src="assets/banner-1.png" alt="classRoom – Der Werkzeugkasten für den Unterricht" width="100%"></p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.4.0-6c8cff" alt="Version 0.4.0"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.4.1-6c8cff" alt="Version 0.4.1"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/lizenz-AGPL--3.0-3dba79" alt="Lizenz AGPL-3.0"></a>
   <img src="https://img.shields.io/badge/docker-amd64%20%7C%20arm64-2496ed" alt="Docker amd64 und arm64">
   <img src="https://img.shields.io/badge/SvelteKit-Svelte%205-ff3e00" alt="SvelteKit mit Svelte 5">
@@ -52,6 +52,7 @@
 - **Lehrkräfte** sehen nur ihre Klassen und deren Schüler, legen eigene Klassen an und ändern unter *Mein Konto* nur ihr eigenes Passwort. Beim Starten einer Stunde wählen sie die Klasse (die zuletzt genutzte ist vorausgewählt); das Kopfband zeigt sie, Stundenziele und Kacheln gelten nur für diese Klasse, Selbstlern-Ziele über alle Klassen. Auftrag, Ziele, Stunde, Wochenplan, Räume, Gruppen, Test, Ampel und Hintergrund hat jede Lehrkraft für sich.
 - **Schüler mit mehreren Lehrkräften** sehen die Klasse der Lehrkraft, die zuletzt eine Stunde gestartet hat, und können im Menü unter *Lehrkraft* wechseln.
 - Schüler-Passwörter werden **nur einmal** angezeigt; „Neues Passwort“ meldet den Schüler überall ab.
+- **Test-Schüler** (nur Admin): beim Hinzufügen oder Bearbeiten ankreuzen – zum Ausprobieren der Schüler-Sicht. Andere Lehrkräfte sehen ihn nirgends, auch nicht in gemeinsamen Klassen.
 - Nach 5 falschen Passwörtern ist ein Benutzername 5 Minuten gesperrt.
 
 **Allgemein**
@@ -102,7 +103,7 @@ Alles steht in der `.env`; nach einer Änderung `docker compose up -d` ausführe
 | `TEACHER_USERNAME` | Benutzername des ersten Lehrerkontos (immer Admin) | `lehrer` |
 | `TEACHER_PASSWORD` | Passwort dazu – **muss gesetzt werden** (mind. 8 Zeichen) | – |
 | `PORT` | Port, unter dem classRoom erreichbar ist | `3000` |
-| `CLASSROOM_VERSION` | Image-Version, z. B. `0.4.0` | `latest` |
+| `CLASSROOM_VERSION` | Image-Version, z. B. `0.4.1` | `latest` |
 
 <details>
 <summary><b>Weitere Einstellungen</b></summary>
@@ -210,7 +211,7 @@ npm run dev                  # Entwicklung mit Hot-Reload
 npm run build && npm start   # Produktionsbuild
 ```
 
-**Release:** Version in `package.json` anheben, Abschnitt in `CHANGELOG.md` ergänzen, committen und einen Tag pushen (`git tag v0.4.0 && git push origin v0.4.0`). GitHub Actions baut dann das Image für amd64/arm64, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release mit dem Text aus dem CHANGELOG an. Dependabot hält npm-Pakete, Docker-Basis-Image und Actions aktuell.
+**Release:** Version in `package.json` anheben, Abschnitt in `CHANGELOG.md` ergänzen, committen und einen Tag pushen (`git tag v0.4.1 && git push origin v0.4.1`). GitHub Actions baut dann das Image für amd64/arm64, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release mit dem Text aus dem CHANGELOG an. Dependabot hält npm-Pakete, Docker-Basis-Image und Actions aktuell.
 
 </details>
 

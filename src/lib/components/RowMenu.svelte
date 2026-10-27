@@ -8,19 +8,38 @@
 	let open = $state(false);
 	/** @type {HTMLElement | undefined} */
 	let root = $state();
+	/** @type {HTMLButtonElement | undefined} */
+	let button = $state();
+	// Fest im Fenster statt in der Tabelle – sonst schneidet deren Rand das Menü ab (z. B. in der letzten Zeile).
+	let pos = $state({ top: 0, right: 0, up: false });
 
 	const shown = $derived(items.filter((i) => !i.hidden));
+	const MENU_ITEM = 34;
+
+	function toggle() {
+		if (open || !button) {
+			open = false;
+			return;
+		}
+		const r = button.getBoundingClientRect();
+		// Unten zu wenig Platz → nach oben aufklappen.
+		const up = r.bottom + shown.length * MENU_ITEM + 16 > innerHeight && r.top > innerHeight - r.bottom;
+		pos = { top: up ? r.top - 4 : r.bottom + 4, right: innerWidth - r.right, up };
+		open = true;
+	}
 </script>
 
 <svelte:window
 	onclick={(e) => open && !root?.contains(/** @type {Node} */ (e.target)) && (open = false)}
 	onkeydown={(e) => open && e.key === 'Escape' && (open = false)}
+	onscroll={() => (open = false)}
+	onresize={() => (open = false)}
 />
 
 <span class="wrap" bind:this={root}>
-	<button class="dots" class:plain aria-label={label} title={label} aria-expanded={open} onclick={() => (open = !open)}>⋯</button>
+	<button class="dots" class:plain aria-label={label} title={label} aria-expanded={open} bind:this={button} onclick={toggle}>⋯</button>
 	{#if open}
-		<div class="menu" role="menu">
+		<div class="menu" class:up={pos.up} role="menu" style:top="{pos.top}px" style:right="{pos.right}px">
 			{#each shown as item (item.label)}
 				<button
 					role="menuitem"
@@ -62,10 +81,8 @@
 	}
 
 	.menu {
-		position: absolute;
-		top: calc(100% + 4px);
-		right: 0;
-		z-index: 20;
+		position: fixed;
+		z-index: 40;
 		min-width: 190px;
 		display: flex;
 		flex-direction: column;
@@ -74,6 +91,10 @@
 		border-radius: 10px;
 		background: var(--surface);
 		box-shadow: 0 10px 30px rgb(5 8 15 / 25%);
+	}
+
+	.menu.up {
+		transform: translateY(-100%);
 	}
 
 	.menu button {

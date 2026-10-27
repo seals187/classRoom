@@ -182,6 +182,8 @@ function migrate(db) {
 	db.exec('CREATE UNIQUE INDEX IF NOT EXISTS assignments_share_code ON assignments(share_code)');
 	// „Anmelden als …“: Admin, der gerade als diese Lehrkraft bzw. dieser Schüler angemeldet ist.
 	addColumn(db, 'sessions', 'admin_id', 'INTEGER REFERENCES users(id) ON DELETE CASCADE');
+	// Test-Schüler: sieht nur der Admin (zum Ausprobieren der Schüler-Sicht).
+	addColumn(db, 'students', 'is_test', 'INTEGER NOT NULL DEFAULT 0');
 }
 
 /**
@@ -537,7 +539,8 @@ export function clearTest(owner) {
 /** @typedef {{ id: number, text: string, done: boolean }} Goal */
 /**
  * `activeAt`: letztes Abhaken dieser Zielart, sonst Zeitpunkt des ersten Ziels (ms) – für „seit X min“.
- * @typedef {{ id: number, firstName: string, lastName: string, username: string | null, goals: Goal[], activeAt: number | null }} Student
+ * `isTest`: Test-Schüler, nur für den Admin sichtbar.
+ * @typedef {{ id: number, firstName: string, lastName: string, username: string | null, isTest: boolean, goals: Goal[], activeAt: number | null }} Student
  */
 /** @typedef {{ username: string, password: string }} Credentials */
 /**
@@ -586,19 +589,22 @@ export function countPeople(scope) {
 export function listStudents(scope, kind = 'self') {
 	const db = getDb();
 	const lastCheck = goalKind(kind) === 'lesson' ? 'st.last_check_lesson' : 'st.last_check_self';
-	const students = /** @type {(Omit<Student, 'goals' | 'activeAt'> & { lastCheck: number | null })[]} */ (
+	const rows = /** @type {(Omit<Student, 'goals' | 'activeAt' | 'isTest'> & { lastCheck: number | null, isTest: number })[]} */ (
 		db
 			.prepare(
-				`SELECT s.id, s.first_name AS firstName, s.last_name AS lastName, u.username, ${lastCheck} AS lastCheck
+				`SELECT s.id, s.first_name AS firstName, s.last_name AS lastName, u.username, s.is_test AS isTest,
+				   ${lastCheck} AS lastCheck
 				 FROM students s
 				 LEFT JOIN users u ON u.student_id = s.id
 				 LEFT JOIN student_teachers st ON st.student_id = s.id AND st.teacher_id = ?
 				 WHERE CASE WHEN ? THEN s.id IN (SELECT student_id FROM class_students WHERE class_id = ?)
+				     AND (s.is_test = 0 OR EXISTS (SELECT 1 FROM users a WHERE a.id = ? AND a.is_admin = 1))
 				   ELSE ? OR st.teacher_id IS NOT NULL END
 				 ORDER BY s.last_name COLLATE NOCASE, s.first_name COLLATE NOCASE`
 			)
-			.all(scope.owner, scope.classId ? 1 : 0, scope.classId ?? 0, scope.all ? 1 : 0)
+			.all(scope.owner, scope.classId ? 1 : 0, scope.classId ?? 0, scope.owner, scope.all ? 1 : 0)
 	);
+	const students = rows.map((r) => ({ ...r, isTest: r.isTest === 1 }));
 	const goals = /** @type {{ id: number, studentId: number, text: string, done: number, createdAt: number | null }[]} */ (
 		db
 			.prepare(
@@ -643,13 +649,15 @@ export function addStudents(classId, list) {
 export function addStudent(classId, input) {
 	const firstName = requiredText(input.firstName, 'Vorname', 60);
 	const lastName = requiredText(input.lastName, 'Nachname', 60);
+	// Test-Schüler (nur Admin, siehe API): sieht keine andere Lehrkraft.
+	const isTest = input.isTest === true;
 	const wanted = typeof input.username === 'string' && input.username.trim() ? normalizeUsername(input.username) : null;
 	if (wanted) assertUsernameFree(wanted);
 
 	const db = getDb();
 	return db.transaction(() => {
 		const id = Number(
-			db.prepare('INSERT INTO students (first_name, last_name) VALUES (?, ?)').run(firstName, lastName).lastInsertRowid
+			db.prepare('INSERT INTO students (first_name, last_name, is_test) VALUES (?, ?, ?)').run(firstName, lastName, isTest ? 1 : 0).lastInsertRowid
 		);
 		db.prepare('INSERT INTO class_students (class_id, student_id) VALUES (?, ?)').run(classId, id);
 		const username = wanted ?? suggestUsername(firstName, lastName);
@@ -660,7 +668,7 @@ export function addStudent(classId, input) {
 			id
 		);
 		syncVisibility();
-		return { student: { id, firstName, lastName, username, goals: [], activeAt: null }, credentials: { username, password } };
+		return { student: { id, firstName, lastName, username, isTest, goals: [], activeAt: null }, credentials: { username, password } };
 	})();
 }
 
@@ -720,6 +728,11 @@ export function updateStudent(id, input) {
 	db.transaction(() => {
 		db.prepare('UPDATE students SET first_name = ?, last_name = ? WHERE id = ?').run(firstName, lastName, id);
 		if (username !== undefined) db.prepare('UPDATE users SET username = ? WHERE id = ?').run(username, current.userId);
+		// Test-Schüler an/aus (nur Admin, siehe API) – ändert, welche Lehrkräfte ihn sehen.
+		if (typeof input.isTest === 'boolean') {
+			db.prepare('UPDATE students SET is_test = ? WHERE id = ?').run(input.isTest ? 1 : 0, id);
+			syncVisibility();
+		}
 	})();
 	return { id, firstName, lastName };
 }
