@@ -2,6 +2,16 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [0.3.7] – 2026-10-27
+
+### Neu
+- **Auftrag per QR-Code teilen:** Neues QR-Symbol neben A− / A+ (standardmäßig nicht geteilt). „Teilen starten“ erzeugt einen zufälligen Link wie `/a/k7xq9mpzab`, gültig 1, 7 oder 30 Tage (Standard über `SHARE_DAYS`, 7 Tage). Der QR-Code erscheint groß in der Mitte – gut scannbar am Beamer –, darunter der kurze Link zum Abtippen; mit „Klein in der Ecke zeigen“ bleibt er unten rechts in der Karte
+- **Öffentliche Seite ohne Anmeldung:** zeigt nur Titel, Text, Bilder und Links – keine Namen, Ziele, Fortschritte oder Klasseninfos, nichts zum Bearbeiten, kein Menü. Gut lesbar auf dem Handy, Hell/Dunkel nach Gerät, Änderungen erscheinen nach spätestens 30 Sekunden. Bilder gibt es nur mit gültigem Code; die Seite erscheint nicht in Suchmaschinen und gibt den Link nicht an verlinkte Seiten weiter
+- **Link verwalten:** „Neuer Link“ macht den alten ungültig, „Teilen beenden“ beendet ihn, die Gültigkeit lässt sich ab jetzt neu setzen. Wird der Auftrag gelöscht, übertragen oder durch einen weitergegebenen ersetzt, endet der Link; eine Kopie ist nicht geteilt
+- **Menü „Anzeige → Geteilte Aufträge“:** Jede Lehrkraft sieht ihren geteilten Auftrag, der Admin alle – mit Link, Ablauf, Verlängern und Beenden. Hinweis, wenn die Adresse nur im Schulnetz bzw. nur auf diesem Gerät (localhost) erreichbar ist
+- **`PUBLIC_URL`** in der `.env`: Adresse, unter der Handys classRoom erreichen (für QR-Code und Link) – leer = die Adresse im Browser
+- **Anmelden als … (Admin):** Unter „Lehrer verwalten“ und „Schüler verwalten“ meldet sich der Admin per Knopf als diese Lehrkraft bzw. dieser Schüler an und sieht classRoom genau so – mit deren Rechten, z. B. zum Nachschauen oder Beheben von Problemen. Unten links steht „Angemeldet als … · Zurück zu …“; „Zurück“ meldet wieder als Admin an. Wird dem Admin das Admin-Recht entzogen, endet auch diese Anmeldung
+
 ## [0.3.6] – 2026-10-25
 
 ### Neu
@@ -178,6 +188,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.3.7]: https://github.com/seals187/classRoom/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/seals187/classRoom/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/seals187/classRoom/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/seals187/classRoom/compare/v0.3.3...v0.3.4

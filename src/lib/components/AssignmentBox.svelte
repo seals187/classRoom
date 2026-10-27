@@ -9,6 +9,9 @@
 	import Icon from './Icon.svelte';
 	import GoalsFromAssignment from './GoalsFromAssignment.svelte';
 	import AssignmentTransfer from './AssignmentTransfer.svelte';
+	import ShareAssignment from './ShareAssignment.svelte';
+	import { page } from '$app/state';
+	import { qrPath, shareUrl } from '#lib/share.js';
 
 	/**
 	 * @type {{
@@ -17,10 +20,24 @@
 	 *   students?: { id: number, firstName: string, lastName: string }[],
 	 *   groups?: import('#lib/server/groups.js').Group[],
 	 *   progress?: Record<string, { done: number, total: number }>,
-	 *   owners?: { id: number, username: string, title: string, hasAssignment: boolean }[]
+	 *   owners?: { id: number, username: string, title: string, hasAssignment: boolean }[],
+	 *   share?: import('#lib/server/share.js').Share | null,
+	 *   fileBase?: string
 	 * }}
 	 */
-	let { assignment, canEdit, students = [], groups = [], progress = {}, owners = [] } = $props();
+	let { assignment, canEdit, students = [], groups = [], progress = {}, owners = [], share = null, fileBase = '/api/files/' } = $props();
+
+	// Teilen per QR-Code; der kleine QR-Code in der Ecke gilt pro Gerät (z. B. am Beamer).
+	let shareOpen = $state(false);
+	const CORNER_KEY = 'shareCorner';
+	let corner = $state(false);
+	const cornerQr = $derived(share && corner && !editing ? qrPath(shareUrl(page.data.sharing?.publicUrl ?? '', share.code)) : null);
+
+	function openShare() {
+		// Das Fenster liegt außerhalb der Karte – im Vollbild wäre es nicht zu sehen.
+		if (document.fullscreenElement) document.exitFullscreen();
+		shareOpen = true;
+	}
 
 	// Fenster „Ziele aus dem Auftrag“
 	let goalsOpen = $state(false);
@@ -75,6 +92,7 @@
 			if (stored >= SCALES[0] && stored <= SCALES[SCALES.length - 1]) scale = stored;
 			const storedImage = Number(localStorage.getItem(IMAGE_SIZE_KEY));
 			if (IMAGE_SIZES.includes(storedImage)) imageSize = storedImage;
+			corner = localStorage.getItem(CORNER_KEY) === '1';
 		} catch {
 			// Kein localStorage – Standardgröße.
 		}
@@ -152,7 +170,7 @@
 	const shownImages = $derived(editing ? images : assignment.images);
 
 	/** @param {number} id */
-	const fileUrl = (id) => `/api/files/${id}`;
+	const fileUrl = (id) => `${fileBase}${id}`;
 
 	async function startEdit() {
 		title = assignment.title;
@@ -462,6 +480,17 @@
 						A+
 					</button>
 				{/if}
+				{#if canEdit && !isEmpty}
+					<button
+						class="tool"
+						class:on={!!share}
+						onclick={openShare}
+						title={share ? 'QR-Code zeigen' : 'Per QR-Code teilen'}
+						aria-label={share ? 'QR-Code zeigen' : 'Per QR-Code teilen'}
+					>
+						<Icon name="qr" size={13} />
+					</button>
+				{/if}
 				{#if shownImages.length > 0}
 					<button
 						class="tool img-size"
@@ -626,9 +655,27 @@
 			{/if}
 		</aside>
 	{/if}
+
+	{#if cornerQr}
+		<!-- Klein unten rechts, liegt über dem Inhalt (kein Verschieben); Klick zeigt ihn groß. -->
+		<button class="corner-qr" onclick={openShare} title="QR-Code groß zeigen" aria-label="QR-Code groß zeigen">
+			<svg viewBox="0 0 {cornerQr.size} {cornerQr.size}" shape-rendering="crispEdges" aria-hidden="true">
+				<rect width={cornerQr.size} height={cornerQr.size} fill="#fff" />
+				<path d={cornerQr.d} fill="#000" />
+			</svg>
+		</button>
+	{/if}
 </section>
 
 {#if canEdit}
+	<ShareAssignment
+		bind:open={shareOpen}
+		{share}
+		bind:corner={() => corner, (value) => {
+			corner = value;
+			remember(CORNER_KEY, value ? 1 : 0);
+		}}
+	/>
 	<GoalsFromAssignment bind:open={goalsOpen} steps={stepTexts} title={assignment.title} {students} {groups} />
 	{#if owners.length > 1}<AssignmentTransfer bind:open={transferOpen} {owners} />{/if}
 {/if}
@@ -644,6 +691,7 @@
 <style>
 	/* Text links, Bilder rechts; die Karte füllt auf der Startseite den freien Platz. */
 	.assignment {
+		position: relative;
 		flex: 1;
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
@@ -747,6 +795,38 @@
 		border-color: var(--lesson-accent);
 		background: color-mix(in srgb, var(--lesson-accent) 12%, transparent);
 		color: var(--lesson-accent);
+	}
+
+	/* Auftrag ist geteilt */
+	.tool.on {
+		border-color: var(--accent);
+		background: var(--accent-soft);
+		color: var(--accent);
+	}
+
+	.corner-qr {
+		position: absolute;
+		right: 14px;
+		bottom: 14px;
+		z-index: 2;
+		width: 132px;
+		padding: 6px;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		background: #fff;
+		box-shadow: var(--shadow);
+		cursor: zoom-in;
+	}
+
+	.corner-qr svg {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+
+	.fullscreen .corner-qr {
+		position: fixed;
+		width: 180px;
 	}
 
 	.main {

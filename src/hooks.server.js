@@ -50,6 +50,21 @@ export async function handle({ event, resolve: resolvePage }) {
 		return json({ message: 'Anfrage von fremder Seite abgelehnt' }, { status: 403 });
 	}
 
+	// Geteilter Auftrag (QR-Code): öffentlich, auch für Angemeldete ohne Kopfband und Klassendaten.
+	// Nicht in Suchmaschinen, kein Referrer (sonst sähen verlinkte Seiten den Code), nichts zwischenspeichern.
+	if (event.url.pathname.startsWith('/a/')) {
+		event.locals.user = null;
+		event.locals.owner = 0;
+		// Hell/Dunkel immer nach dem Gerät (Handy), nicht nach DEFAULT_THEME.
+		const response = await resolvePage(event, {
+			transformPageChunk: ({ html }) => html.replace('%classroom.theme%', 'system')
+		});
+		response.headers.set('x-robots-tag', 'noindex, nofollow');
+		response.headers.set('referrer-policy', 'no-referrer');
+		response.headers.set('cache-control', 'no-store');
+		return response;
+	}
+
 	const token = event.cookies.get(SESSION_COOKIE);
 	const user = token ? validateSession(token) : null;
 	if (token && !user) clearSessionCookie(event.cookies, event.request, event.url);

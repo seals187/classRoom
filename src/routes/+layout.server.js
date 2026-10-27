@@ -2,6 +2,7 @@ import { getConfig } from '#lib/server/config.js';
 import { manageScope, teachersOf } from '#lib/server/auth.js';
 import { countPeople, getNoiseSettings, getRooms, getSchedule, getSettings, getWarnMinutes } from '#lib/server/db.js';
 import { getBackground } from '#lib/server/backgrounds.js';
+import { listShares } from '#lib/server/share.js';
 
 export function load({ locals }) {
 	if (!locals.user) return { user: null };
@@ -20,6 +21,10 @@ export function load({ locals }) {
 		counts: isTeacher ? countPeople(manageScope(locals)) : null,
 		rooms: isTeacher ? getRooms(owner) : [],
 		schedule: isTeacher ? getSchedule(owner) : [],
+		// Geteilte Aufträge (QR-Code): Adresse für den Link, Standard-Gültigkeit, Anzahl im Menü.
+		sharing: isTeacher
+			? { publicUrl: config.publicUrl, days: config.shareDays, count: listShares(locals.user).length }
+			: null,
 		// Schüler mit mehreren Lehrkräften wählen im Menü, wessen Auftrag und Stunde sie sehen.
 		teachers: isTeacher ? [] : teachersOf(/** @type {number} */ (locals.user.studentId)),
 		owner,

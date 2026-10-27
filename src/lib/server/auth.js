@@ -11,8 +11,9 @@ export const SESSION_COOKIE = 'classroom_session';
  * `isAdmin`: verwaltet Lehrkräfte und ordnet Schüler zu. `seesAll`: Lehrkraft sieht alle Schüler, nicht nur ihre.
  * @typedef {{
  *   id: number, username: string, role: 'teacher' | 'student', studentId: number | null, displayName: string,
- *   isAdmin: boolean, seesAll: boolean
+ *   isAdmin: boolean, seesAll: boolean, actingAdmin: { id: number, username: string } | null
  * }} User
+ * `actingAdmin`: Admin, der sich als diese Person angemeldet hat („Anmelden als …“), sonst null.
  */
 
 // Wird verglichen, wenn der Benutzer nicht existiert – damit die Antwortzeit nichts verrät.
@@ -86,13 +87,18 @@ function findLoginUser(key) {
 	return matches.length === 1 ? matches[0] : undefined;
 }
 
-/** @param {number} userId */
-function createSession(userId) {
+/** @param {number} userId @param {number | null} [adminId] „Anmelden als …“: der Admin dahinter */
+function createSession(userId, adminId = null) {
 	const db = getDb();
 	const token = randomBytes(32).toString('base64url');
 	const expires = Date.now() + getConfig().sessionHours * 3_600_000;
 	db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(Date.now());
-	db.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(hashToken(token), userId, expires);
+	db.prepare('INSERT INTO sessions (id, user_id, expires_at, admin_id) VALUES (?, ?, ?, ?)').run(
+		hashToken(token),
+		userId,
+		expires,
+		adminId
+	);
 	return { token, expires: new Date(expires) };
 }
 
@@ -101,27 +107,60 @@ function createSession(userId) {
  * @returns {User | null}
  */
 export function validateSession(token) {
-	const row = /** @type {(Omit<User, 'displayName' | 'isAdmin' | 'seesAll'> & { firstName: string | null, lastName: string | null, isAdmin: number, seesAll: number }) | undefined} */ (
+	const row = /** @type {(Omit<User, 'displayName' | 'isAdmin' | 'seesAll' | 'actingAdmin'> & { firstName: string | null, lastName: string | null, isAdmin: number, seesAll: number, adminId: number | null, adminName: string | null, adminIsAdmin: number | null }) | undefined} */ (
 		getDb()
 			.prepare(
 				`SELECT u.id, u.username, u.role, u.student_id AS studentId, s.first_name AS firstName, s.last_name AS lastName,
-				   u.is_admin AS isAdmin, u.sees_all AS seesAll
+				   u.is_admin AS isAdmin, u.sees_all AS seesAll,
+				   se.admin_id AS adminId, a.username AS adminName, a.is_admin AS adminIsAdmin
 				 FROM sessions se
 				 JOIN users u ON u.id = se.user_id
 				 LEFT JOIN students s ON s.id = u.student_id
+				 LEFT JOIN users a ON a.id = se.admin_id
 				 WHERE se.id = ? AND se.expires_at > ?`
 			)
 			.get(hashToken(token), Date.now())
 	);
 	if (!row) return null;
-	const { firstName, lastName, isAdmin, seesAll, ...user } = row;
+	const { firstName, lastName, isAdmin, seesAll, adminId, adminName, adminIsAdmin, ...user } = row;
+	// Ist der Admin dahinter kein Admin mehr, endet auch die Anmeldung als andere Person.
+	if (adminId && adminIsAdmin !== 1) return null;
 	const teacher = user.role === 'teacher';
 	return {
 		...user,
 		displayName: firstName ? `${firstName} ${lastName}` : user.username,
 		isAdmin: teacher && isAdmin === 1,
-		seesAll: teacher && seesAll === 1
+		seesAll: teacher && seesAll === 1,
+		actingAdmin: adminId && adminName ? { id: adminId, username: adminName } : null
 	};
+}
+
+/**
+ * „Anmelden als …“: Der Admin bekommt eine Sitzung als diese Lehrkraft bzw. dieser Schüler, mit allen
+ * deren Rechten. Seine eigene Sitzung endet; „Zurück“ (returnToAdmin) meldet ihn wieder an.
+ * @param {string} token aktuelle Sitzung des Admins
+ * @param {User} admin
+ * @param {{ teacherId?: unknown, studentId?: unknown }} target
+ */
+export function impersonate(token, admin, target) {
+	if (admin.actingAdmin) error(400, 'Erst zurück zum eigenen Konto');
+	const db = getDb();
+	const row = /** @type {{ id: number } | undefined} */ (
+		target.studentId !== undefined
+			? db.prepare("SELECT id FROM users WHERE role = 'student' AND student_id = ?").get(Number(target.studentId))
+			: db.prepare("SELECT id FROM users WHERE role = 'teacher' AND id = ?").get(Number(target.teacherId))
+	);
+	if (!row) error(404, target.studentId !== undefined ? 'Der Schüler hat keinen Zugang' : 'Lehrkraft nicht gefunden');
+	if (row.id === admin.id) error(400, 'Das ist dein eigenes Konto');
+	deleteSession(token);
+	return createSession(row.id, admin.id);
+}
+
+/** Zurück zum Admin-Konto. @param {string} token @param {User} user */
+export function returnToAdmin(token, user) {
+	if (!user.actingAdmin) error(400, 'Nicht als andere Person angemeldet');
+	deleteSession(token);
+	return createSession(user.actingAdmin.id);
 }
 
 // --- Wessen Klasse gilt: Lehrkräfte sehen ihre eigene, Schüler die einer ihrer Lehrkräfte ---

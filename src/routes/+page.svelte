@@ -55,7 +55,15 @@
 </svelte:head>
 
 <div class="home">
-	<AssignmentBox assignment={data.assignment} canEdit={data.user?.role === 'teacher'} {students} groups={data.groups} {progress} owners={data.assignmentOwners} />
+	<AssignmentBox
+		assignment={data.assignment}
+		canEdit={data.user?.role === 'teacher'}
+		{students}
+		groups={data.groups}
+		{progress}
+		owners={data.assignmentOwners}
+		share={data.share}
+	/>
 
 	{#if !ui.focus}
 		<!-- Stundenziele auf einen Blick: ein Quadrat pro Schüler -->

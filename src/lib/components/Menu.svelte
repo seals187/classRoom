@@ -12,6 +12,8 @@
 	import logo from '#lib/assets/logo.svg';
 	import { noise, setNoiseConfig, startNoise, stopNoise } from '#lib/noise.svelte.js';
 	import { ui } from '#lib/ui.svelte.js';
+	import { daysLabel, formatExpiry, reach, shareUrl, shortUrl } from '#lib/share.js';
+	import { ask } from '#lib/dialog.svelte.js';
 
 	/**
 	 * @type {{
@@ -39,10 +41,11 @@
 	const counts = $derived(page.data.counts ?? null);
 
 	// Unterseiten im Menü: Wochenplan, Ampel, Hintergrund & Darstellung.
-	/** @type {'main' | 'plan' | 'noise' | 'display'} */
+	/** @type {'main' | 'plan' | 'noise' | 'display' | 'share'} */
 	let view = $state('main');
 	const TITLES = $derived({
 		plan: 'Wochenplan',
+		share: 'Geteilte Aufträge',
 		noise: 'Ampel',
 		display: page.data.background?.canChoose ? 'Hintergrund & Darstellung' : 'Darstellung'
 	});
@@ -284,6 +287,49 @@
 		else startNoise();
 	}
 
+	// --- Geteilte Aufträge (QR-Code): eigene bzw. als Admin alle ---
+
+	/** @type {{ publicUrl: string, days: number, count: number } | null} */
+	const sharing = $derived(page.data.sharing ?? null);
+	const shareReach = $derived(sharing ? reach(sharing.publicUrl || page.url.origin) : '');
+	/** @type {import('#lib/server/share.js').ShareEntry[]} */
+	let shares = $state([]);
+	let shareMessage = $state('');
+
+	async function loadShares() {
+		try {
+			shares = await api('/api/share', 'GET');
+		} catch (err) {
+			shareMessage = err instanceof Error ? err.message : String(err);
+		}
+	}
+
+	function openShares() {
+		shareMessage = '';
+		view = 'share';
+		loadShares();
+	}
+
+	/** @param {number} teacher @param {'PUT' | 'DELETE'} method */
+	async function changeShare(teacher, method) {
+		shareMessage = '';
+		if (method === 'DELETE') {
+			const ok = await ask({
+				title: 'Teilen beenden?',
+				message: 'Der Link und QR-Code funktionieren danach nicht mehr.',
+				confirmLabel: 'Beenden',
+				danger: true
+			});
+			if (!ok) return;
+		}
+		try {
+			await api('/api/share', method, method === 'PUT' ? { teacher, days: sharing?.days } : { teacher });
+			await Promise.all([loadShares(), invalidateAll()]);
+		} catch (err) {
+			shareMessage = err instanceof Error ? err.message : String(err);
+		}
+	}
+
 	// Avatar unten: Initialen aus dem Namen („admin-classroom“ → „AC“, „Lea Muster“ → „LM“).
 	const accountName = $derived(isTeacher ? user.username : user.displayName);
 	const initials = $derived(
@@ -463,6 +509,14 @@
 
 			<section class="display">
 				<h3 class="group">Anzeige</h3>
+				{#if sharing}
+					<button class="row" onclick={openShares}>
+						<Icon name="qr" size={18} />
+						Geteilte Aufträge
+						<span class="value">{sharing.count || 'keine'}</span>
+						<Icon name="chevron" size={16} />
+					</button>
+				{/if}
 				{#if noiseSettings}
 					<button class="row" onclick={() => (view = 'noise')}>
 						<Icon name="traffic" size={18} />
@@ -568,6 +622,37 @@
 					{#if noise.error}<p class="message error">{noise.error}</p>{/if}
 					{#if noiseMessage}<p class="message">{noiseMessage}</p>{/if}
 				</form>
+			{:else if view === 'share' && sharing}
+				<div class="sub">
+					{#if shareReach === 'device'}
+						<p class="hint warn">
+							Die Adresse zeigt auf dieses Gerät – Handys erreichen sie so nicht. classRoom über die Netzwerk-Adresse
+							öffnen oder PUBLIC_URL in der .env setzen.
+						</p>
+					{:else if shareReach === 'local'}
+						<p class="hint">Die Adresse ist nur im Schulnetz erreichbar – Handys müssen im selben WLAN sein.</p>
+					{/if}
+					{#each shares as s (s.teacherId)}
+						<div class="share">
+							<strong class="share-title">{s.title || 'Auftrag ohne Titel'}</strong>
+							<small>
+								{user.isAdmin ? `${s.username}${s.teacherId === user.id ? ' (du)' : ''} · ` : ''}bis {formatExpiry(s.expiresAt)}
+							</small>
+							<small class="share-link">{shortUrl(shareUrl(sharing.publicUrl, s.code))}</small>
+							<div class="share-actions">
+								<button onclick={() => changeShare(s.teacherId, 'PUT')} title="Gültig ab jetzt für {daysLabel(sharing.days)}">
+									+ {daysLabel(sharing.days)}
+								</button>
+								<button class="danger" onclick={() => changeShare(s.teacherId, 'DELETE')}>Beenden</button>
+							</div>
+						</div>
+					{:else}
+						<p class="hint">
+							Kein Auftrag ist geteilt. Teilen über das QR-Symbol <Icon name="qr" size={12} /> in der Leiste des Auftrags.
+						</p>
+					{/each}
+					{#if shareMessage}<p class="message error">{shareMessage}</p>{/if}
+				</div>
 			{:else if view === 'display'}
 				<div class="sub">
 					<div class="setting">
@@ -1110,6 +1195,50 @@
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
+	}
+
+	/* Geteilte Aufträge */
+	.hint.warn {
+		padding: 8px 10px;
+		border-radius: 8px;
+		background: var(--warn-soft);
+		color: var(--text);
+	}
+
+	.share {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 10px 12px;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+	}
+
+	.share-title {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.share small {
+		color: var(--muted);
+		font-size: 0.8rem;
+	}
+
+	.share .share-link {
+		font-family: ui-monospace, monospace;
+		word-break: break-all;
+	}
+
+	.share-actions {
+		display: flex;
+		gap: 6px;
+		margin-top: 6px;
+	}
+
+	.share-actions button {
+		padding: 4px 10px;
+		font-size: 0.85rem;
 	}
 
 	.setting {

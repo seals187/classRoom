@@ -7,6 +7,7 @@
 	import Header from '#lib/components/Header.svelte';
 	import BackgroundPicker from '#lib/components/BackgroundPicker.svelte';
 	import Dialog from '#lib/components/Dialog.svelte';
+	import ActingAs from '#lib/components/ActingAs.svelte';
 
 	let { data, children } = $props();
 
@@ -35,6 +36,8 @@
 </main>
 
 <Dialog />
+
+{#if data.user?.actingAdmin}<ActingAs user={data.user} />{/if}
 
 {#if data.user && data.background?.canChoose}
 	<BackgroundPicker bind:open={ui.backgroundPicker} isTeacher={data.user.role === 'teacher'} />

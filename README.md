@@ -1,7 +1,7 @@
 <p align="center"><img src="assets/banner-1.png" alt="classRoom – Der Werkzeugkasten für den Unterricht" width="100%"></p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.3.6-6c8cff" alt="Version 0.3.6"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.3.7-6c8cff" alt="Version 0.3.7"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/lizenz-AGPL--3.0-3dba79" alt="Lizenz AGPL-3.0"></a>
   <img src="https://img.shields.io/badge/docker-amd64%20%7C%20arm64-2496ed" alt="Docker amd64 und arm64">
   <img src="https://img.shields.io/badge/SvelteKit-Svelte%205-ff3e00" alt="SvelteKit mit Svelte 5">
@@ -15,13 +15,13 @@
 
 | | |
 |---|---|
-| 📋 **Auftrag** | Großer Titel, nummerierte Schritte, Bilder und Links; Editor mit Formatierung. Schrift per **A− / A+** (bis 250 %) und Bilder in feinen Stufen vergrößern, Vollbild. Schritte als **Stunden- oder Selbstlern-Ziele** an alle, eine **Gruppe** oder einzelne Schüler senden (mit Rückgängig); Gruppen mit Name und Farbe bleiben gespeichert – danach zeigt jeder Schritt, wie viele ihn erledigt haben. |
+| 📋 **Auftrag** | Großer Titel, nummerierte Schritte, Bilder und Links; Editor mit Formatierung. Schrift per **A− / A+** (bis 250 %) und Bilder in feinen Stufen vergrößern, Vollbild. Schritte als **Stunden- oder Selbstlern-Ziele** an alle, eine **Gruppe** oder einzelne Schüler senden (mit Rückgängig); Gruppen mit Name und Farbe bleiben gespeichert – danach zeigt jeder Schritt, wie viele ihn erledigt haben. Per **QR-Code teilen**: Handys öffnen den Auftrag ohne Anmeldung, nur zum Lesen. |
 | ⏱️ **Kopfband** | Zeitbalken in vier Phasen (Arbeitsphase · Aufräumen · Jetzt zurück in Raum 101 · Sofort zurück in Raum 101!), rechts immer „Zurück in Raum 101 um 22:38“, mit Viertelstunden-Strichen, Digitaluhr. Ohne laufende Stunde zeigt der Balken **„▶ Stunde starten · 45 min · bis 18:18 · Zimmer 101“** und „Anpassen…“. Im Menü startet eine Karte die Stunde mit den Reitern **Zeit · Raum · Aufräumen**: Dauer (15/30/45/90 min) oder eigene Zeiten, Raum aus einer eigenen Liste (oder kein Raumwechsel), Aufräumen-Phase in Minuten. Der **Wochenplan** im Menü legt pro Wochentag beliebig viele Stunden mit Raum fest (z. B. Mo 12:00–13:00 · Werkraum); die nächste Stunde von heute steht dann im Startbalken. Gestartet wird immer per Klick, die geplante Dauer läuft ab dem Klick. |
 | 🎯 **Stundenziele & Selbstlernen** | Eine Kachel pro Schüler, live aktualisiert, 20–30 Schüler ohne Scrollen. Jede Kachel zeigt das aktuelle Ziel und die Zeit seit dem letzten Abhaken – wer seit 15 min nichts abgehakt hat, wird gelb markiert. Schüler können **„Nur meine Kachel“** einschalten. |
 | 🚦 **Lautstärke-Ampel** | Misst über das Mikrofon des Lehrer-Geräts – nur im Browser, kein Ton wird gespeichert oder übertragen. Schüler sehen die Farbe. |
 | 📝 **Test-Modus** | Große Uhr, vergangene und verbleibende Zeit im Vollbild; läuft serverseitig weiter. |
 | 🎨 **Hintergründe** | 25 Verläufe, 26 Muster, 18 Fotos oder eigene Bilder – für alle festgelegt oder von jedem Schüler selbst gewählt. Hell- und Dunkelmodus. |
-| 👥 **Verwaltung** | Schüler und Lehrkräfte in Minuten angelegt; Schüler melden sich mit Kürzel oder „Vorname Nachname“ an. Mehrere Lehrkräfte: jede sieht nur ihre eigenen Schüler und hat ihren eigenen Auftrag, Ziele, Stunde und Wochenplan; einen Auftrag kann man an eine andere Lehrkraft kopieren oder übertragen. |
+| 👥 **Verwaltung** | Schüler und Lehrkräfte in Minuten angelegt; Schüler melden sich mit Kürzel oder „Vorname Nachname“ an. Mehrere Lehrkräfte: jede sieht nur ihre eigenen Schüler und hat ihren eigenen Auftrag, Ziele, Stunde und Wochenplan; einen Auftrag kann man an eine andere Lehrkraft kopieren oder übertragen. Der Admin kann sich per Knopf **als eine Lehrkraft oder ein Schüler anmelden** und sieht classRoom dann genau so (z. B. bei Problemen), „Zurück“ führt wieder zum eigenen Konto. |
 
 <p align="center"><img src="assets/banner-2.png" alt="Stundenziele und Selbstlern-Modus" width="100%"></p>
 
@@ -32,6 +32,7 @@
 - Eine nummerierte Liste erscheint als Schritte mit Zahl im Kreis – auch von Hand getippte Zeilen mit „- “ oder „1. “ am Anfang; **Umschalt+Enter** gibt einem Schritt eine graue Zusatzzeile.
 - Bilder per Knopf, Strg+V oder Hineinziehen (irgendwo auf die Karte) – sie werden vor dem Hochladen verkleinert (höchstens 1920 px, einige hundert KB). Rechts als gleich zugeschnittene Vorschau, ein Klick zeigt das ganze Bild.
 - Links stehen klein unten in der Karte. Das HTML wird beim Speichern serverseitig bereinigt.
+- **Teilen per QR-Code** (Symbol neben A− / A+, standardmäßig aus): erzeugt einen zufälligen Link wie `/a/k7xq9mpzab`, gültig 1, 7 oder 30 Tage (Standard `SHARE_DAYS`). Der QR-Code erscheint groß in der Mitte (gut scannbar am Beamer), darunter der kurze Link zum Abtippen; auf Wunsch bleibt er klein unten rechts in der Karte. Die öffentliche Seite zeigt nur Titel, Text, Bilder und Links – keine Namen, Ziele oder Fortschritte –, folgt Hell/Dunkel des Geräts und lädt alle 30 s neu. „Neuer Link“ macht den alten ungültig, „Teilen beenden“ beendet ihn; Bilder gibt es nur mit gültigem Code. Ein gelöschter oder übertragener Auftrag ist nicht mehr geteilt. Im Menü unter **Anzeige → Geteilte Aufträge** sieht jede Lehrkraft ihre (der Admin alle) und kann verlängern oder beenden; dort steht auch, wenn die Adresse nur im Schulnetz erreichbar ist.
 - Leiste **Stundenziele** darunter: ein Quadrat pro Schüler, je mehr erledigt, desto grüner – sind alle fertig: „🎉 Alle Ziele erledigt“.
 
 **Stundenziele & Selbstlern-Modus**
@@ -100,7 +101,7 @@ Alles steht in der `.env`; nach einer Änderung `docker compose up -d` ausführe
 | `TEACHER_USERNAME` | Benutzername des ersten Lehrerkontos (immer Admin) | `lehrer` |
 | `TEACHER_PASSWORD` | Passwort dazu – **muss gesetzt werden** (mind. 8 Zeichen) | – |
 | `PORT` | Port, unter dem classRoom erreichbar ist | `3000` |
-| `CLASSROOM_VERSION` | Image-Version, z. B. `0.3.6` | `latest` |
+| `CLASSROOM_VERSION` | Image-Version, z. B. `0.3.7` | `latest` |
 
 <details>
 <summary><b>Weitere Einstellungen</b></summary>
@@ -117,6 +118,8 @@ Alles steht in der `.env`; nach einer Änderung `docker compose up -d` ausführe
 | `DEFAULT_THEME` | `system`, `light` oder `dark` | `system` |
 | `GOALS_COLLAPSED` | Ziel-Kacheln anfangs eingeklappt | `true` |
 | `UPLOAD_MAX_MB` | Maximale Bildgröße nach dem Verkleinern | `5` |
+| `PUBLIC_URL` | Adresse, unter der Handys classRoom erreichen (für QR-Code und Link beim Teilen), z. B. `http://192.168.1.20:3000` – leer = die Adresse im Browser | – |
+| `SHARE_DAYS` | Wie lange ein geteilter Auftrag standardmäßig gültig ist (Tage, 1–365) | `7` |
 | `NOISE_ENABLED` | Lautstärke-Ampel anzeigen | `true` |
 | `NOISE_SENSITIVITY` | Empfindlichkeit des Mikrofons, 1–10 | `5` |
 | `NOISE_YELLOW` / `NOISE_RED` | Pegel 0–100 für Gelb bzw. Rot | `50` / `75` |
@@ -206,7 +209,7 @@ npm run dev                  # Entwicklung mit Hot-Reload
 npm run build && npm start   # Produktionsbuild
 ```
 
-**Release:** Version in `package.json` anheben, Abschnitt in `CHANGELOG.md` ergänzen, committen und einen Tag pushen (`git tag v0.3.6 && git push origin v0.3.6`). GitHub Actions baut dann das Image für amd64/arm64, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release mit dem Text aus dem CHANGELOG an. Dependabot hält npm-Pakete, Docker-Basis-Image und Actions aktuell.
+**Release:** Version in `package.json` anheben, Abschnitt in `CHANGELOG.md` ergänzen, committen und einen Tag pushen (`git tag v0.3.7 && git push origin v0.3.7`). GitHub Actions baut dann das Image für amd64/arm64, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release mit dem Text aus dem CHANGELOG an. Dependabot hält npm-Pakete, Docker-Basis-Image und Actions aktuell.
 
 </details>
 

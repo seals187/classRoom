@@ -5,6 +5,7 @@
 	import { ask } from '#lib/dialog.svelte.js';
 	import CopyButton from '#lib/components/CopyButton.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import { actAs } from '#lib/act-as.js';
 	import { autoRefresh } from '#lib/refresh.js';
 	import { onMount } from 'svelte';
 	import { suggestUsername } from '#lib/username.js';
@@ -219,7 +220,7 @@
 	{#if data.students.length === 0}
 		<p class="hint">Noch keine Schüler angelegt.</p>
 	{:else}
-		<div class="row list-head" aria-hidden="true">
+		<div class="row list-head" class:act={data.user?.isAdmin} aria-hidden="true">
 			<span>Vorname</span>
 			<span>Nachname</span>
 			<span>Kürzel</span>
@@ -227,7 +228,7 @@
 			<span class="right" title="Selbstlern-Ziele erledigt/gesamt">Selbst</span>
 			<span class="actions-head">Aktionen</span>
 		</div>
-		<ul>
+		<ul class:act={data.user?.isAdmin}>
 			{#each data.students as student (student.id)}
 				{#if editing?.id === student.id}
 					<li class="editing">
@@ -280,6 +281,18 @@
 								<span class="no-login">kein Zugang</span>
 							{/if}
 							{@render counts(student.id)}
+							{#if data.user?.isAdmin}
+								<!-- „Anmelden als …“ (nur Admin): classRoom so sehen wie dieser Schüler -->
+								<button
+									class="icon-btn"
+									aria-label="Als {student.firstName} {student.lastName} anmelden"
+									title={student.username ? `Als ${student.firstName} ${student.lastName} anmelden – classRoom so sehen wie dieser Schüler` : 'Kein Zugang'}
+									disabled={!student.username || !!data.user.actingAdmin}
+									onclick={() => actAs({ studentId: student.id })}
+								>
+									<Icon name="login" size={16} />
+								</button>
+							{/if}
 							<button
 								class="icon-btn"
 								aria-label="{student.username ? 'Neues Passwort erzeugen' : 'Zugang anlegen'} für {student.firstName} {student.lastName}"
@@ -430,6 +443,12 @@
 
 	.list-head .right {
 		text-align: right;
+	}
+
+	/* Admin: zusätzlich „Anmelden als …“ */
+	.list-head.act,
+	ul.act .row {
+		grid-template-columns: 1fr 1fr 1fr 60px 60px 34px 34px 34px 34px;
 	}
 
 	/* „Aktionen“ über Passwort-, Bearbeiten- und Löschen-Knopf. */
@@ -607,6 +626,14 @@
 
 		.row > :nth-child(8) {
 			grid-area: 1 / 6 / 3;
+		}
+
+		ul.act .row {
+			grid-template-columns: auto auto minmax(0, 1fr) 34px 34px 34px 34px;
+		}
+
+		.row > :nth-child(9) {
+			grid-area: 1 / 7 / 3;
 		}
 
 		.count {

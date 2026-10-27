@@ -154,6 +154,12 @@ function migrate(db) {
 	addColumn(db, 'student_groups', 'teacher_id', 'INTEGER REFERENCES users(id) ON DELETE CASCADE');
 	addColumn(db, 'backgrounds', 'teacher_id', 'INTEGER REFERENCES users(id) ON DELETE CASCADE');
 	db.exec('CREATE INDEX IF NOT EXISTS goals_teacher_kind ON goals(teacher_id, kind)');
+	// Öffentlicher Link zum Auftrag (QR-Code): Code und Ablauf (ms seit 1970), leer = nicht geteilt.
+	addColumn(db, 'assignments', 'share_code', 'TEXT');
+	addColumn(db, 'assignments', 'share_expires', 'INTEGER');
+	db.exec('CREATE UNIQUE INDEX IF NOT EXISTS assignments_share_code ON assignments(share_code)');
+	// „Anmelden als …“: Admin, der gerade als diese Lehrkraft bzw. dieser Schüler angemeldet ist.
+	addColumn(db, 'sessions', 'admin_id', 'INTEGER REFERENCES users(id) ON DELETE CASCADE');
 }
 
 /**

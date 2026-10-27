@@ -4,5 +4,7 @@ import { defineParams } from '@sveltejs/kit/params';
 // Ein Matcher gibt den umgewandelten Wert zurück – oder undefined, wenn die Route nicht passt.
 export const params = defineParams({
 	/** Nur positive Ganzzahlen. @param {string} param */
-	id: (param) => (/^\d+$/.test(param) ? Number(param) : undefined)
+	id: (param) => (/^\d+$/.test(param) ? Number(param) : undefined),
+	/** Code eines geteilten Auftrags (/a/k7xq9mpzab), Großbuchstaben vom Abtippen zählen mit. @param {string} param */
+	code: (param) => (/^[a-z0-9]{10}$/i.test(param) ? param.toLowerCase() : undefined)
 });

@@ -4,6 +4,7 @@
 	import { api } from '#lib/api.js';
 	import { ask } from '#lib/dialog.svelte.js';
 	import Icon from '#lib/components/Icon.svelte';
+	import { actAs } from '#lib/act-as.js';
 
 	let { data } = $props();
 
@@ -150,15 +151,27 @@
 					<button type="submit">Setzen</button>
 				</form>
 				{#if isAdmin}
-					<button
-						class="icon-btn danger"
-						aria-label="Lehrkraft {teacher.username} löschen"
-						title="Löschen"
-						disabled={self || data.teachers.length <= 1}
-						onclick={() => remove(teacher)}
-					>
-						<Icon name="close" size={16} />
-					</button>
+					<span class="row-actions">
+						<!-- „Anmelden als …“: classRoom so sehen wie diese Lehrkraft (z. B. bei Problemen) -->
+						<button
+							class="icon-btn"
+							aria-label="Als {teacher.username} anmelden"
+							title={self ? 'Dein eigenes Konto' : `Als ${teacher.username} anmelden – classRoom so sehen wie diese Lehrkraft`}
+							disabled={self || !!data.user?.actingAdmin}
+							onclick={() => actAs({ teacherId: teacher.id })}
+						>
+							<Icon name="login" size={16} />
+						</button>
+						<button
+							class="icon-btn danger"
+							aria-label="Lehrkraft {teacher.username} löschen"
+							title="Löschen"
+							disabled={self || data.teachers.length <= 1}
+							onclick={() => remove(teacher)}
+						>
+							<Icon name="close" size={16} />
+						</button>
+					</span>
 				{/if}
 			</li>
 		{/each}
@@ -225,6 +238,11 @@
 	li form {
 		display: flex;
 		gap: 8px;
+	}
+
+	.row-actions {
+		display: flex;
+		gap: 6px;
 	}
 
 	li form input {
@@ -323,7 +341,7 @@
 			grid-column: 1 / -1;
 		}
 
-		li .icon-btn {
+		li .row-actions {
 			grid-area: 1 / 2;
 		}
 

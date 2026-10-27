@@ -36,6 +36,19 @@ const parseDurations = (value) => {
 	return list.length ? [...new Set(list)].slice(0, 4) : [45, 90];
 };
 
+/**
+ * "http://192.168.1.20:3000/" → "http://192.168.1.20:3000"; ungültig oder leer → ''.
+ * @param {string | undefined} value
+ */
+const publicUrl = (value) => {
+	try {
+		const url = new URL(value?.trim() ?? '');
+		return ['http:', 'https:'].includes(url.protocol) ? `${url.origin}${url.pathname.replace(/\/+$/, '')}` : '';
+	} catch {
+		return '';
+	}
+};
+
 /** Konfiguration aus der .env-Datei (bzw. den Umgebungsvariablen), mit Standardwerten. */
 export function getConfig() {
 	return {
@@ -58,6 +71,9 @@ export function getConfig() {
 		},
 		sessionHours: Math.max(1, Number(env.SESSION_HOURS) || 12),
 		uploadMaxMb: Math.max(1, Number(env.UPLOAD_MAX_MB) || 5),
+		// Geteilter Auftrag (QR-Code): Adresse, unter der Handys die App erreichen – leer = die Adresse im Browser.
+		publicUrl: publicUrl(env.PUBLIC_URL),
+		shareDays: intIn(env.SHARE_DAYS, 1, 365, 7),
 		goalsCollapsed: env.GOALS_COLLAPSED?.trim().toLowerCase() !== 'false',
 		noise: {
 			enabled: env.NOISE_ENABLED?.trim().toLowerCase() !== 'false',

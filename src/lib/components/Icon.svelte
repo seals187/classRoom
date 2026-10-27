@@ -122,6 +122,15 @@
 		<path d="m9 18 6-6-6-6" />
 	{:else if name === 'back'}
 		<path d="m15 18-6-6 6-6" />
+	{:else if name === 'qr'}
+		<rect x="3" y="3" width="7" height="7" rx="1" />
+		<rect x="14" y="3" width="7" height="7" rx="1" />
+		<rect x="3" y="14" width="7" height="7" rx="1" />
+		<path d="M14 14h3v3h-3zM20 14v.01M14 20v.01M17 20h4M20 17v3" />
+	{:else if name === 'login'}
+		<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+		<path d="m10 17 5-5-5-5" />
+		<path d="M15 12H3" />
 	{:else if name === 'user-plus'}
 		<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
 		<circle cx="9" cy="7" r="4" />

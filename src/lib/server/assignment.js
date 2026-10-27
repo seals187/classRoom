@@ -93,6 +93,7 @@ export function listAssignmentOwners() {
 /**
  * Auftrag einer Lehrkraft an eine andere kopieren oder übertragen (dann ist er bei der ersten weg).
  * Hat die Ziel-Lehrkraft schon einen Auftrag, braucht es `replace`. Bilder werden geteilt, nicht verdoppelt.
+ * Ein öffentlicher Link (QR-Code) geht nicht mit: Die Kopie ist ungeteilt, beim Übertragen und Ersetzen endet er.
  * @param {number} from
  * @param {number} to
  * @param {unknown} mode 'copy' | 'move'
@@ -114,7 +115,8 @@ export function transferAssignment(from, to, mode, replace) {
 			`INSERT INTO assignments (teacher_id, title, body, images, format, updated_at)
 			 SELECT ?, title, body, images, format, CURRENT_TIMESTAMP FROM assignments WHERE teacher_id = ?
 			 ON CONFLICT(teacher_id) DO UPDATE SET title = excluded.title, body = excluded.body,
-			   images = excluded.images, format = excluded.format, updated_at = excluded.updated_at`
+			   images = excluded.images, format = excluded.format, updated_at = excluded.updated_at,
+			   share_code = NULL, share_expires = NULL`
 		).run(to, from);
 		if (mode === 'move') db.prepare('DELETE FROM assignments WHERE teacher_id = ?').run(from);
 		// Bilder des ersetzten Auftrags aufräumen, sofern sonst niemand sie braucht.
