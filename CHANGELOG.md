@@ -2,6 +2,11 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [0.4.2] – 2026-10-28
+
+### Behoben
+- **Bilder größer/kleiner auf dem Handy (geteilte Seite):** „Bilder +“ tat nichts, weil das Bild schon bildschirmbreit war, und „Bilder −“ änderte nur in kaum sichtbaren Schritten. Auf dem Handy gibt es jetzt eigene Stufen – ganze Breite, ¾, ½, ⅓ –, „+“ ist bei ganzer Breite ausgegraut; die Wahl bleibt pro Gerät gespeichert
+
 ## [0.4.1] – 2026-10-28
 
 ### Neu
@@ -222,6 +227,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.4.2]: https://github.com/seals187/classRoom/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/seals187/classRoom/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/seals187/classRoom/compare/v0.3.7...v0.4.0
 [0.3.7]: https://github.com/seals187/classRoom/compare/v0.3.6...v0.3.7

@@ -81,8 +81,14 @@
 	let imageSize = $state(30);
 	// Smartphone (Bilder über dem Text): Breite einer Vorschau in % – 15 → 13.5 %, 30 → 27 %, 50 → ganze Breite.
 	const thumbWidth = $derived(imageSize <= 30 ? imageSize * 0.9 : 27 + (imageSize - 30) * 3.65);
-	// Geteilte Seite auf dem Handy: Standard ganze Breite (Bilder − macht sie kleiner).
-	const plainThumb = $derived(Math.min(100, 35 + (imageSize - 15) * (65 / 15)));
+	// Geteilte Seite auf dem Handy: eigene, gut sichtbare Stufen – ganze Breite (Standard), ¾, ½, ⅓.
+	const PHONE_IMAGE_KEY = 'sharedPhoneImageWidth';
+	const PHONE_SIZES = [33, 50, 75, 100];
+	let phoneSize = $state(100);
+	let phone = $state(false);
+	const phoneSteps = $derived(plain && phone);
+	const sizeLevels = $derived(phoneSteps ? PHONE_SIZES : IMAGE_SIZES);
+	const sizeNow = $derived(phoneSteps ? phoneSize : imageSize);
 	/** @type {HTMLElement | undefined} */
 	let sectionEl = $state();
 	let fullscreen = $state(false);
@@ -97,12 +103,22 @@
 			const storedImage = Number(localStorage.getItem(IMAGE_SIZE_KEY));
 			if (IMAGE_SIZES.includes(storedImage)) imageSize = storedImage;
 			corner = localStorage.getItem(CORNER_KEY) === '1';
+			const storedPhone = Number(localStorage.getItem(PHONE_IMAGE_KEY));
+			if (PHONE_SIZES.includes(storedPhone)) phoneSize = storedPhone;
 		} catch {
 			// Kein localStorage – Standardgröße.
 		}
+		// Wie im CSS: bis 760 px stehen die Bilder über bzw. unter dem Text.
+		const narrow = window.matchMedia('(max-width: 760px)');
+		const onNarrow = () => (phone = narrow.matches);
+		onNarrow();
+		narrow.addEventListener('change', onNarrow);
 		const onChange = () => (fullscreen = document.fullscreenElement === sectionEl);
 		document.addEventListener('fullscreenchange', onChange);
-		return () => document.removeEventListener('fullscreenchange', onChange);
+		return () => {
+			document.removeEventListener('fullscreenchange', onChange);
+			narrow.removeEventListener('change', onNarrow);
+		};
 	});
 
 	/**
@@ -135,6 +151,11 @@
 
 	/** @param {number} dir */
 	function changeImageSize(dir) {
+		if (phoneSteps) {
+			phoneSize = nextLevel(PHONE_SIZES, phoneSize, dir);
+			remember(PHONE_IMAGE_KEY, phoneSize);
+			return;
+		}
 		imageSize = nextLevel(IMAGE_SIZES, imageSize, dir);
 		remember(IMAGE_SIZE_KEY, imageSize);
 	}
@@ -467,7 +488,7 @@
 	style:--scale={editing || plain ? null : scale}
 	style:--user-scale={plain ? scale : null}
 	style:--image-col={editing ? null : `${imageSize}%`}
-	style:--thumb={editing ? null : `${plain ? plainThumb : thumbWidth}%`}
+	style:--thumb={editing ? null : `${plain ? phoneSize : thumbWidth}%`}
 	bind:this={sectionEl}
 >
 	<!-- Über die ganze Breite: Knöpfe bleiben fix, auch wenn die Bilder größer werden. -->
@@ -501,7 +522,7 @@
 					<button
 						class="tool img-size"
 						onclick={() => changeImageSize(-1)}
-						disabled={imageSize <= IMAGE_SIZES[0]}
+						disabled={sizeNow <= sizeLevels[0]}
 						title="Bilder kleiner"
 						aria-label="Bilder kleiner"
 					>
@@ -510,7 +531,7 @@
 					<button
 						class="tool img-size"
 						onclick={() => changeImageSize(1)}
-						disabled={imageSize >= IMAGE_SIZES[IMAGE_SIZES.length - 1]}
+						disabled={sizeNow >= sizeLevels[sizeLevels.length - 1]}
 						title="Bilder größer"
 						aria-label="Bilder größer"
 					>
