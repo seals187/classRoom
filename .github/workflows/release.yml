@@ -19,7 +19,7 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Für das arm64-Image (z. B. Raspberry Pi oder Mac mit Apple-Chip)
       - uses: docker/setup-qemu-action@v3
