@@ -2,6 +2,11 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [0.4.3] – 2026-10-28
+
+### Neu
+- **Hell/Dunkel auf der geteilten Seite (QR-Code):** Unter dem Auftrag gibt es den Schalter „☀ Hell / ☾ Dunkel“ – auf dem Laptop rechts, auf dem Handy mittig, auch bei einem abgelaufenen Link. Die Wahl bleibt pro Gerät gespeichert
+
 ## [0.4.2] – 2026-10-28
 
 ### Behoben
@@ -227,6 +232,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.4.3]: https://github.com/seals187/classRoom/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/seals187/classRoom/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/seals187/classRoom/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/seals187/classRoom/compare/v0.3.7...v0.4.0

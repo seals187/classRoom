@@ -3,6 +3,7 @@
 	import { autoRefresh } from '#lib/refresh.js';
 	import AssignmentBox from '#lib/components/AssignmentBox.svelte';
 	import PublicBand from '#lib/components/PublicBand.svelte';
+	import ThemeToggle from '#lib/components/ThemeToggle.svelte';
 
 	// Geteilter Auftrag ohne Anmeldung: Zeitband der Stunde und der Auftrag – nur lesen, kein Menü.
 	let { data } = $props();
@@ -55,6 +56,7 @@
 			</p>
 		</div>
 	{/if}
+	<div class="theme"><ThemeToggle /></div>
 </div>
 
 <style>
@@ -87,6 +89,12 @@
 
 	.collapsed {
 		display: none;
+	}
+
+	/* Hell/Dunkel ohne Menü: unten am Ende der Seite. */
+	.theme {
+		display: flex;
+		justify-content: flex-end;
 	}
 
 	.gone {
@@ -138,6 +146,11 @@
 
 		.go .task.open {
 			display: block;
+		}
+
+		.theme {
+			justify-content: center;
+			padding-bottom: 8px;
 		}
 	}
 </style>
