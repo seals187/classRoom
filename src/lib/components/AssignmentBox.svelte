@@ -92,11 +92,24 @@
 	/** @type {HTMLElement | undefined} */
 	let sectionEl = $state();
 	let fullscreen = $state(false);
+	// Geteilte Seite ohne Menü: Hell/Dunkel als Knopf ganz rechts (gleicher Speicher wie im Menü).
+	/** @type {'light' | 'dark'} */
+	let theme = $state('light');
+	function toggleTheme() {
+		theme = theme === 'dark' ? 'light' : 'dark';
+		document.documentElement.setAttribute('data-theme', theme);
+		try {
+			localStorage.setItem('theme', theme);
+		} catch {
+			// Gilt dann nur bis zum Neuladen.
+		}
+	}
 	// Erst im Browser (DOMParser) – sonst passt das Server-HTML nicht zum Client.
 	let mounted = $state(false);
 
 	onMount(() => {
 		mounted = true;
+		theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
 		try {
 			const stored = Number(localStorage.getItem(SCALE_KEY));
 			if (stored >= SCALES[0] && stored <= SCALES[SCALES.length - 1]) scale = stored;
@@ -554,6 +567,16 @@
 				{#if !isEmpty}
 					<button class="tool" onclick={toggleFullscreen} title={fullscreen ? 'Vollbild beenden' : 'Vollbild'} aria-label="Vollbild">
 						<Icon name={fullscreen ? 'close' : 'expand'} size={13} />
+					</button>
+				{/if}
+				{#if plain}
+					<button
+						class="tool theme"
+						onclick={toggleTheme}
+						title={theme === 'dark' ? 'Hell' : 'Dunkel'}
+						aria-label={theme === 'dark' ? 'Hell darstellen' : 'Dunkel darstellen'}
+					>
+						<Icon name={theme === 'dark' ? 'sun' : 'moon'} size={13} />
 					</button>
 				{/if}
 			</div>

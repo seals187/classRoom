@@ -2,6 +2,11 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [0.4.4] – 2026-10-28
+
+### Geändert
+- **Hell/Dunkel auf der geteilten Seite als Icon:** Statt des Schalters unter dem Auftrag gibt es jetzt einen Knopf (☾ / ☀) oben ganz rechts neben „Vollbild“ – auf Laptop und Handy. Ein abgelaufener Link zeigt keinen Knopf mehr, sondern einfach die zuletzt gewählte Darstellung
+
 ## [0.4.3] – 2026-10-28
 
 ### Neu
@@ -232,6 +237,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.4.4]: https://github.com/seals187/classRoom/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/seals187/classRoom/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/seals187/classRoom/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/seals187/classRoom/compare/v0.4.0...v0.4.1
