@@ -1,5 +1,5 @@
 <script>
-	import { untrack } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api.js';
@@ -42,6 +42,63 @@
 	/** Menüpunkt der aktuellen Seite (Verwaltung: Reiter in der Adresse, offene Klasse gehört zu „Klassen“). @param {string} href */
 	const isActive = (href) =>
 		page.url.pathname + page.url.search === href || (href === '/verwaltung' && page.url.pathname.startsWith('/verwaltung/'));
+
+	// --- Aufträge (Lehrkräfte): aufklappbar, pro Gerät gemerkt ---
+	/** @type {{ id: number, title: string, classIds: number[], active: boolean }[]} */
+	const assignmentList = $derived(page.data.assignmentList ?? []);
+	// Höchstens fünf und nur so viele, wie ohne Scrollen ins Menü passen: der aktive und die neuesten.
+	const MENU_ASSIGNMENTS = 5;
+	let fitLimit = $state(MENU_ASSIGNMENTS);
+	const menuAssignments = $derived.by(() => {
+		const limit = Math.max(0, fitLimit);
+		if (limit === 0) return [];
+		if (assignmentList.length <= limit) return assignmentList;
+		const active = assignmentList.find((a) => a.active);
+		const others = assignmentList.filter((a) => !a.active);
+		const keep = new Set(others.slice(others.length - (limit - (active ? 1 : 0))));
+		return assignmentList.filter((a) => a === active || keep.has(a));
+	});
+	/** @type {HTMLElement | undefined} */
+	let drawerEl = $state();
+	// Beim Öffnen (und wenn sich der Inhalt ändert) erst alle zeigen, dann kürzen, bis nichts mehr scrollt.
+	$effect(() => {
+		if (!open || view !== 'main' || !assignmentsOpen || !drawerEl) return;
+		void assignmentList.length;
+		void cardShut;
+		fitLimit = MENU_ASSIGNMENTS;
+		const el = drawerEl;
+		(async () => {
+			await tick();
+			while (fitLimit > 0 && el.scrollHeight > el.clientHeight + 1) {
+				fitLimit--;
+				await tick();
+			}
+		})();
+	});
+	const ASSIGNMENTS_KEY = 'menuAssignmentsOpen';
+	let assignmentsOpen = $state(true);
+	$effect(() => {
+		try {
+			assignmentsOpen = localStorage.getItem(ASSIGNMENTS_KEY) !== '0';
+		} catch {
+			// Kein localStorage – aufgeklappt.
+		}
+	});
+	function toggleAssignments() {
+		assignmentsOpen = !assignmentsOpen;
+		try {
+			localStorage.setItem(ASSIGNMENTS_KEY, assignmentsOpen ? '1' : '0');
+		} catch {
+			// Gilt dann nur bis zum Neuladen.
+		}
+	}
+	const onAssignments = $derived(page.url.pathname === '/' || page.url.pathname.startsWith('/auftraege'));
+	/** @param {{ id: number, active: boolean }} a */
+	const isCurrentAssignment = (a) =>
+		page.url.pathname === `/auftraege/${a.id}` || (a.active && page.url.pathname === '/');
+	/** @param {number | undefined} id */
+	const classColor = (id) =>
+		/** @type {{ id: number, color: string }[]} */ (page.data.classes ?? []).find((c) => c.id === id)?.color ?? 'var(--muted)';
 
 	// Unterseiten im Menü: Wochenplan, Ampel, Hintergrund & Darstellung.
 	/** @type {'main' | 'plan' | 'noise' | 'display' | 'share'} */
@@ -108,7 +165,14 @@
 	} catch {
 		// Kein localStorage – ausgeklappt.
 	}
+	// Wie ein Akkordeon: Ist die Auftragsliste offen, ist die Stunden-Karte kompakt – sonst passt keiner.
+	const cardShut = $derived(collapsed || (isTeacher && assignmentsOpen));
 	function toggleCollapsed() {
+		// Karte aufklappen, die nur wegen der Auftragsliste zu ist: dafür die Liste zuklappen.
+		if (cardShut && !collapsed) {
+			toggleAssignments();
+			return;
+		}
 		collapsed = !collapsed;
 		try {
 			localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0');
@@ -338,8 +402,8 @@
 		loadShares();
 	}
 
-	/** @param {number} teacher @param {'PUT' | 'DELETE'} method */
-	async function changeShare(teacher, method) {
+	/** @param {number} assignment @param {'PUT' | 'DELETE'} method */
+	async function changeShare(assignment, method) {
 		shareMessage = '';
 		if (method === 'DELETE') {
 			const ok = await ask({
@@ -351,7 +415,7 @@
 			if (!ok) return;
 		}
 		try {
-			await api('/api/share', method, method === 'PUT' ? { teacher, days: sharing?.days } : { teacher });
+			await api('/api/share', method, method === 'PUT' ? { assignment, days: sharing?.days } : { assignment });
 			await Promise.all([loadShares(), invalidateAll()]);
 		} catch (err) {
 			shareMessage = err instanceof Error ? err.message : String(err);
@@ -375,7 +439,7 @@
 {#if open}
 	<button class="backdrop" tabindex="-1" aria-label="Menü schließen" onclick={() => (open = false)}></button>
 
-	<aside class="drawer" aria-label="Menü">
+	<aside class="drawer" aria-label="Menü" bind:this={drawerEl}>
 		<div class="drawer-head">
 			<h2 class="brand"><img src={logo} alt="" width="28" height="28" /><span>class<span class="r">R</span>oom</span></h2>
 			<button class="icon-btn" aria-label="Menü schließen" onclick={() => (open = false)}>
@@ -388,11 +452,36 @@
 				{#each groups as group (group.name)}
 					<h3 class="group">{group.name}</h3>
 					{#each group.items as link (link.href)}
-						<a href={link.href} class:active={isActive(link.href)} onclick={() => (open = false)}>
-							<Icon name={link.icon} size={18} />
-							{link.label}
-							{#if link.count && counts}<span class="count">{counts[link.count]}</span>{/if}
-						</a>
+						{#if isTeacher && link.href === '/'}
+							<!-- Aufträge: aufklappbar, der aktive markiert, darunter Neuer Auftrag und die Übersicht. -->
+							<button class="nav-row" class:active={onAssignments} aria-expanded={assignmentsOpen} onclick={toggleAssignments}>
+								<Icon name={link.icon} size={18} />
+								Aufträge
+								<span class="count"><span class="chev" class:open={assignmentsOpen} aria-hidden="true">▾</span>{assignmentList.length}</span>
+							</button>
+							{#if assignmentsOpen}
+								<div class="sub-list">
+									{#each menuAssignments as a (a.id)}
+										{@const href = a.active ? '/' : `/auftraege/${a.id}`}
+										<a {href} class:current={isCurrentAssignment(a)} onclick={() => (open = false)}>
+											<span class="sub-dot" style:background={classColor(a.classIds[0])}></span>
+											<span class="sub-title">{a.title || 'Ohne Titel'}</span>
+											{#if a.active}<span class="badge">aktiv</span>{/if}
+										</a>
+									{/each}
+									<div class="sub-foot">
+										<a class="sub-new" href="/auftraege/neu" onclick={() => (open = false)}>+ Neuer Auftrag</a>
+										<a class="sub-all" href="/auftraege" onclick={() => (open = false)}>Alle Aufträge ›</a>
+									</div>
+								</div>
+							{/if}
+						{:else}
+							<a href={link.href} class:active={isActive(link.href)} onclick={() => (open = false)}>
+								<Icon name={link.icon} size={18} />
+								{link.label}
+								{#if link.count && counts}<span class="count">{counts[link.count]}</span>{/if}
+							</a>
+						{/if}
 					{/each}
 				{/each}
 			</nav>
@@ -401,10 +490,10 @@
 				<section class="lesson">
 					<!-- Überschrift klappt die Karte ein/aus (pro Gerät gemerkt) – so passt das Menü ohne Scrollen. -->
 					<div class="lesson-head">
-						<button class="group status" class:live={running} aria-expanded={!collapsed} onclick={toggleCollapsed}>
+						<button class="group status" class:live={running} aria-expanded={!cardShut} onclick={toggleCollapsed}>
 							<span class="status-dot" aria-hidden="true"></span>
 							{running ? 'Stunde läuft' : 'Keine Stunde aktiv'}
-							<span class="fold" class:shut={collapsed} aria-hidden="true"><Icon name="chevron" size={14} /></span>
+							<span class="fold" class:shut={cardShut} aria-hidden="true"><Icon name="chevron" size={14} /></span>
 						</button>
 						<!-- Wochenplan als kleiner Link in derselben Zeile – spart eine ganze Menüzeile. -->
 						<button class="plan-link" onclick={openPlan} title={schedule.length ? `${schedule.length} Stunden geplant` : 'Noch nichts geplant'}>
@@ -412,7 +501,7 @@
 						</button>
 					</div>
 
-					<div class="card" class:collapsed>
+					<div class="card" class:collapsed={cardShut}>
 						<div class="summary">
 							<span class="left-col">
 								<span class="kicker">{running ? (left >= 0 ? 'Noch' : 'Überzogen') : 'Nächste Stunde'}</span>
@@ -439,7 +528,7 @@
 							</span>
 						</div>
 
-						{#if !collapsed}
+						{#if !cardShut}
 
 						<div class="tabs" role="tablist">
 							<button role="tab" aria-selected={tab === 'zeit'} class:on={tab === 'zeit'} onclick={() => (tab = 'zeit')}>Zeit</button>
@@ -532,7 +621,7 @@
 
 						<div class="actions-row">
 							<button class="primary go" onclick={startLesson} disabled={saving}>
-								{#if running}{collapsed ? 'Aktualisieren' : 'Stunde aktualisieren'}{:else}▶ Stunde starten{/if}
+								{#if running}{cardShut ? 'Aktualisieren' : 'Stunde aktualisieren'}{:else}▶ Stunde starten{/if}
 							</button>
 							{#if running}
 								<button class="text-link" onclick={stopLesson} disabled={saving}>Beenden</button>
@@ -686,7 +775,7 @@
 					{:else if shareReach === 'local'}
 						<p class="hint">Die Adresse ist nur im Schulnetz erreichbar – Handys müssen im selben WLAN sein.</p>
 					{/if}
-					{#each shares as s (s.teacherId)}
+					{#each shares as s (s.id)}
 						<div class="share">
 							<strong class="share-title">{s.title || 'Auftrag ohne Titel'}</strong>
 							<small>
@@ -694,10 +783,10 @@
 							</small>
 							<small class="share-link">{shortUrl(shareUrl(sharing.publicUrl, s.code))}</small>
 							<div class="share-actions">
-								<button onclick={() => changeShare(s.teacherId, 'PUT')} title="Gültig ab jetzt für {daysLabel(sharing.days)}">
+								<button onclick={() => changeShare(s.id, 'PUT')} title="Gültig ab jetzt für {daysLabel(sharing.days)}">
 									+ {daysLabel(sharing.days)}
 								</button>
-								<button class="danger" onclick={() => changeShare(s.teacherId, 'DELETE')}>Beenden</button>
+								<button class="danger" onclick={() => changeShare(s.id, 'DELETE')}>Beenden</button>
 							</div>
 						</div>
 					{:else}
@@ -834,6 +923,99 @@
 	nav a.active {
 		background: var(--accent-soft);
 		color: var(--accent);
+	}
+
+	/* Aufträge: Kopfzeile wie ein Menüpunkt, darunter eingerückt die Liste. */
+	.nav-row {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		padding: 4px 10px;
+		border: 0;
+		border-radius: 8px;
+		background: transparent;
+		color: var(--text);
+		font: inherit;
+		font-weight: 500;
+		text-align: left;
+	}
+
+	.nav-row:hover {
+		background: var(--bg);
+	}
+
+	.nav-row.active {
+		color: var(--accent);
+	}
+
+	.chev {
+		display: inline-block;
+		margin-right: 4px;
+		transform: rotate(-90deg);
+		transition: transform 0.15s;
+	}
+
+	.chev.open {
+		transform: none;
+	}
+
+	.sub-list {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		margin: 0 0 2px 22px;
+	}
+
+	nav .sub-list a {
+		gap: 8px;
+		padding: 1px 8px;
+		line-height: 1.35;
+		font-size: 0.86rem;
+	}
+
+	nav .sub-list a.current {
+		background: var(--accent-soft);
+		color: var(--accent);
+		font-weight: 600;
+	}
+
+	.sub-dot {
+		width: 7px;
+		height: 7px;
+		flex-shrink: 0;
+		border-radius: 50%;
+	}
+
+	.sub-title {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	.badge {
+		flex-shrink: 0;
+		padding: 0 6px;
+		border-radius: 6px;
+		background: var(--ok-soft);
+		color: var(--ok);
+		font-size: 0.7rem;
+		font-weight: 600;
+	}
+
+	.sub-foot {
+		display: flex;
+		justify-content: space-between;
+	}
+
+	nav .sub-list a.sub-new {
+		color: var(--accent);
+	}
+
+	nav .sub-list a.sub-all {
+		color: var(--muted);
 	}
 
 	/* Anzahl rechtsbündig (Schüler, Lehrer) */

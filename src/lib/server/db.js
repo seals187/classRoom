@@ -116,6 +116,30 @@ CREATE TABLE IF NOT EXISTS assignments (
 	format TEXT NOT NULL DEFAULT 'html',
 	updated_at TEXT
 );
+-- Beliebig viele Aufträge je Lehrkraft (löst „assignments“ mit einem Auftrag ab, siehe migrateAssignments).
+-- planned_date: geplanter Tag (YYYY-MM-DD) oder leer; shown_at: zuletzt mit „Zeigen“ aktiv (ms), leer = Entwurf.
+-- Der aktive Auftrag steht als teacher_settings.assignmentId.
+CREATE TABLE IF NOT EXISTS assignment_items (
+	id INTEGER PRIMARY KEY,
+	teacher_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	title TEXT NOT NULL DEFAULT '',
+	body TEXT NOT NULL DEFAULT '',
+	images TEXT NOT NULL DEFAULT '[]',
+	format TEXT NOT NULL DEFAULT 'html',
+	planned_date TEXT,
+	archived INTEGER NOT NULL DEFAULT 0,
+	shown_at INTEGER,
+	share_code TEXT UNIQUE,
+	share_expires INTEGER,
+	created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TEXT
+);
+CREATE INDEX IF NOT EXISTS assignment_items_teacher ON assignment_items(teacher_id);
+CREATE TABLE IF NOT EXISTS assignment_classes (
+	assignment_id INTEGER NOT NULL REFERENCES assignment_items(id) ON DELETE CASCADE,
+	class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+	PRIMARY KEY (assignment_id, class_id)
+);
 `;
 
 /**

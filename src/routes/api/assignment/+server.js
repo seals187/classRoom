@@ -1,13 +1,15 @@
 import { json } from '@sveltejs/kit';
-import { deleteAssignment, saveAssignment } from '#lib/server/assignment.js';
+import { deleteActiveAssignment, getActiveAssignment, saveActiveAssignment } from '#lib/server/assignment.js';
 import { requireTeacher } from '#lib/server/auth.js';
 
+// Der aktive Auftrag (ältere Clients und Skripte). Mehrere Aufträge: /api/assignments.
 export async function PUT({ locals, request }) {
-	requireTeacher(locals);
-	return json(saveAssignment(locals.owner, await request.json()));
+	const user = requireTeacher(locals);
+	return json(saveActiveAssignment(locals.owner, user, await request.json()));
 }
 
 export function DELETE({ locals }) {
 	requireTeacher(locals);
-	return json(deleteAssignment(locals.owner));
+	deleteActiveAssignment(locals.owner);
+	return json(getActiveAssignment(locals.owner));
 }

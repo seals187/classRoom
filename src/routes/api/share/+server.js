@@ -1,34 +1,23 @@
-import { error, json } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
 import { requireTeacher } from '#lib/server/auth.js';
-import { endShare, listShares, setShare } from '#lib/server/share.js';
-
-/**
- * Wessen Auftrag: der eigene, fremde nur als Admin.
- * @param {import('#lib/server/auth.js').User} user
- * @param {unknown} teacher
- */
-function targetOf(user, teacher) {
-	const id = Number(teacher) || user.id;
-	if (id !== user.id && !user.isAdmin) error(403, 'Nur den eigenen Auftrag');
-	return id;
-}
+import { endShare, listShares, setShare, shareTarget } from '#lib/server/share.js';
 
 // Geteilte Aufträge: die eigenen bzw. für den Admin alle.
 export function GET({ locals }) {
 	return json(listShares(requireTeacher(locals)));
 }
 
-// Teilen starten oder ändern: PUT { teacher?, days?, renew?: true }
+// Teilen starten oder ändern: PUT { assignment?, teacher?, days?, renew?: true } – ohne `assignment` der aktive.
 export async function PUT({ locals, request }) {
 	const user = requireTeacher(locals);
-	const { teacher, days, renew } = await request.json();
-	return json(setShare(targetOf(user, teacher), { days, renew }));
+	const { assignment, teacher, days, renew } = await request.json();
+	return json(setShare(shareTarget(user, { assignment, teacher }), { days, renew }));
 }
 
-// Teilen beenden: DELETE { teacher? }
+// Teilen beenden: DELETE { assignment?, teacher? }
 export async function DELETE({ locals, request }) {
 	const user = requireTeacher(locals);
 	const body = await request.json().catch(() => ({}));
-	endShare(targetOf(user, body?.teacher));
+	endShare(shareTarget(user, { assignment: body?.assignment, teacher: body?.teacher }));
 	return new Response(null, { status: 204 });
 }

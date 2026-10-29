@@ -1,22 +1,21 @@
 <script>
 	import { untrack } from 'svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api.js';
 
 	/**
-	 * Auftrag an eine andere Lehrkraft kopieren oder übertragen. Lehrkräfte geben ihren eigenen weiter,
-	 * der Admin wählt auch, von wem.
+	 * Einen Auftrag an eine andere Lehrkraft kopieren oder übertragen. Dort kommt er als Entwurf ohne Klassen an.
 	 * @type {{
 	 *   open: boolean,
-	 *   owners: { id: number, username: string, title: string, hasAssignment: boolean }[]
+	 *   assignment: { id: number, title: string },
+	 *   teachers: { id: number, username: string }[]
 	 * }}
 	 */
-	let { open = $bindable(false), owners } = $props();
+	let { open = $bindable(false), assignment, teachers } = $props();
 
 	const user = $derived(/** @type {import('#lib/server/auth.js').User} */ (page.data.user));
 
-	let from = $state(0);
 	let to = $state(0);
 	/** @type {'copy' | 'move'} */
 	let mode = $state('copy');
@@ -24,21 +23,14 @@
 	let error = $state('');
 	let done = $state('');
 
-	const source = $derived(owners.find((o) => o.id === from));
-	const target = $derived(owners.find((o) => o.id === to));
-	const targets = $derived(owners.filter((o) => o.id !== from));
-	/** @param {{ title: string }} o */
-	const titleOf = (o) => (o.title ? `„${o.title}“` : 'ohne Titel');
+	const target = $derived(teachers.find((t) => t.id === to));
+	const targets = $derived(teachers.filter((t) => t.id !== user.id));
+	const titleOf = $derived(assignment.title ? `„${assignment.title}“` : 'ohne Titel');
 
-	const action = $derived(
-		`${mode === 'copy' ? 'Kopieren' : 'Übertragen'}${target?.hasAssignment ? ' und ersetzen' : ''}`
-	);
-
-	// Beim Öffnen: von mir, noch kein Ziel gewählt. Nur beim Öffnen – nicht, wenn die Seite neu lädt.
+	// Beim Öffnen: noch kein Ziel gewählt. Nur beim Öffnen – nicht, wenn die Seite neu lädt.
 	$effect(() => {
 		if (!open) return;
 		untrack(() => {
-			from = user.id;
 			to = 0;
 			mode = 'copy';
 			error = '';
@@ -47,14 +39,20 @@
 	});
 
 	async function submit() {
-		if (!source || !target) return;
+		if (!target) return;
 		saving = true;
 		error = '';
 		try {
-			await api('/api/assignment/transfer', 'POST', { from, to, mode, replace: target.hasAssignment });
-			done = `Auftrag ${titleOf(source)} ${mode === 'copy' ? 'an' : 'zu'} ${target.username} ${mode === 'copy' ? 'kopiert' : 'übertragen'}.`;
-			await invalidateAll();
+			await api('/api/assignment/transfer', 'POST', { id: assignment.id, to, mode });
+			done = `Auftrag ${titleOf} ${mode === 'copy' ? 'an' : 'zu'} ${target.username} ${mode === 'copy' ? 'kopiert' : 'übertragen'}.`;
 			to = 0;
+			// Übertragen: Der Auftrag ist hier weg – zur Übersicht.
+			if (mode === 'move') {
+				open = false;
+				await goto('/auftraege', { invalidateAll: true });
+			} else {
+				await invalidateAll();
+			}
 		} catch (err) {
 			error = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -72,28 +70,17 @@
 			<h2 id="transfer-title">Auftrag weitergeben</h2>
 
 			<div class="field">
-				<span class="label">Von</span>
-				{#if user.isAdmin}
-					<select bind:value={from} onchange={() => (to = 0)}>
-						{#each owners as o (o.id)}
-							<option value={o.id} disabled={!o.hasAssignment}>
-								{o.username}{o.id === user.id ? ' (du)' : ''} – {o.hasAssignment ? titleOf(o) : 'kein Auftrag'}
-							</option>
-						{/each}
-					</select>
-				{:else}
-					<span class="value">Dein Auftrag {source ? titleOf(source) : ''}</span>
-				{/if}
+				<span class="label">Auftrag</span>
+				<span class="value">{titleOf}</span>
 			</div>
 
 			<div class="field">
 				<span class="label">An</span>
 				<div class="list" role="radiogroup" aria-label="An Lehrkraft">
-					{#each targets as o (o.id)}
+					{#each targets as t (t.id)}
 						<label class="row">
-							<input type="radio" name="to" value={o.id} bind:group={to} />
-							<span class="name">{o.username}{o.id === user.id ? ' (du)' : ''}</span>
-							<small>{o.hasAssignment ? `hat ${titleOf(o)}` : 'noch kein Auftrag'}</small>
+							<input type="radio" name="to" value={t.id} bind:group={to} />
+							<span class="name">{t.username}</span>
 						</label>
 					{/each}
 				</div>
@@ -102,32 +89,22 @@
 			<div class="modes" role="radiogroup" aria-label="Art">
 				<button type="button" role="radio" aria-checked={mode === 'copy'} class:on={mode === 'copy'} onclick={() => (mode = 'copy')}>
 					<strong>Kopieren</strong>
-					<small>bleibt auch bei {source?.username ?? '…'}</small>
+					<small>bleibt auch bei dir</small>
 				</button>
 				<button type="button" role="radio" aria-checked={mode === 'move'} class:on={mode === 'move'} onclick={() => (mode = 'move')}>
 					<strong>Übertragen</strong>
-					<small>wird bei {source?.username ?? '…'} entfernt</small>
+					<small>wird bei dir entfernt</small>
 				</button>
 			</div>
 
-			{#if target?.hasAssignment}
-				<p class="warn">
-					{target.username} hat schon den Auftrag {titleOf(target)} – er wird ersetzt. Ziele bleiben, wie sie sind.
-				</p>
-			{/if}
+			<p class="note">Er kommt dort als Entwurf ohne Klassen an, ein geteilter Link geht nicht mit.</p>
 			{#if error}<p class="error">{error}</p>{/if}
 			{#if done}<p class="done" role="status">{done}</p>{/if}
 
 			<div class="actions">
 				<button type="button" onclick={() => (open = false)}>{done ? 'Schließen' : 'Abbrechen'}</button>
-				<button
-					type="button"
-					class="primary"
-					class:danger={target?.hasAssignment}
-					disabled={!source?.hasAssignment || !target || saving}
-					onclick={submit}
-				>
-					{action}
+				<button type="button" class="primary" disabled={!target || saving} onclick={submit}>
+					{mode === 'copy' ? 'Kopieren' : 'Übertragen'}
 				</button>
 			</div>
 		</div>
@@ -200,15 +177,6 @@
 		font-weight: 600;
 	}
 
-	select {
-		padding: 8px 10px;
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		background: var(--surface);
-		color: var(--text);
-		font: inherit;
-	}
-
 	.list {
 		display: flex;
 		flex-direction: column;
@@ -240,15 +208,6 @@
 		font-weight: 600;
 	}
 
-	.row small {
-		margin-left: auto;
-		overflow: hidden;
-		color: var(--muted);
-		font-size: 0.8rem;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
 	.modes {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
@@ -277,7 +236,7 @@
 		color: var(--accent);
 	}
 
-	.warn,
+	.note,
 	.error,
 	.done {
 		margin: 0;
@@ -285,11 +244,8 @@
 		line-height: 1.45;
 	}
 
-	.warn {
-		padding: 8px 12px;
-		border-radius: 8px;
-		background: var(--warn-soft, rgb(240 138 60 / 14%));
-		color: var(--text);
+	.note {
+		color: var(--muted);
 	}
 
 	.error {
@@ -312,11 +268,5 @@
 		padding: 8px 16px;
 		font-weight: 600;
 		white-space: nowrap;
-	}
-
-	.actions .danger {
-		border-color: var(--danger);
-		background: var(--danger);
-		color: #fff;
 	}
 </style>

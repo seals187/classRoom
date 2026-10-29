@@ -9,6 +9,7 @@ import {
 } from '#lib/server/auth.js';
 import { claimOrphans } from '#lib/server/db.js';
 import { migrateClasses } from '#lib/server/classes.js';
+import { migrateAssignments } from '#lib/server/assignment.js';
 import { getConfig } from '#lib/server/config.js';
 
 export function init() {
@@ -17,6 +18,8 @@ export function init() {
 	claimOrphans();
 	// Seit den Klassen: jede Lehrkraft bekommt einmalig eine Klasse mit ihren bisherigen Schülern.
 	migrateClasses();
+	// Seit mehreren Aufträgen: der bisherige wird der erste – aktiv, für die aktive Klasse, gleicher Link.
+	migrateAssignments();
 }
 
 const PUBLIC_PATHS = ['/login'];

@@ -1,7 +1,7 @@
 <script>
 	import { onMount, tick } from 'svelte';
 	import { ui } from '#lib/ui.svelte.js';
-	import { invalidateAll } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { api } from '#lib/api.js';
 	import { ask, askText, showError } from '#lib/dialog.svelte.js';
 	import { shrinkImage } from '#lib/shrink-image.js';
@@ -15,19 +15,38 @@
 
 	/**
 	 * @type {{
-	 *   assignment: import('#lib/server/assignment.js').Assignment,
+	 *   assignment: Pick<import('#lib/server/assignment.js').Assignment, 'title' | 'html' | 'images'> & Partial<import('#lib/server/assignment.js').Assignment>,
 	 *   canEdit: boolean,
 	 *   students?: { id: number, firstName: string, lastName: string }[],
 	 *   groups?: import('#lib/server/groups.js').Group[],
 	 *   progress?: Record<string, { done: number, total: number }>,
-	 *   owners?: { id: number, username: string, title: string, hasAssignment: boolean }[],
+	 *   teachers?: { id: number, username: string }[],
 	 *   share?: import('#lib/server/share.js').Share | null,
 	 *   fileBase?: string,
-	 *   plain?: boolean
+	 *   plain?: boolean,
+	 *   home?: boolean,
+	 *   startEditing?: boolean
 	 * }}
 	 */
-	let { assignment, canEdit, students = [], groups = [], progress = {}, owners = [], share = null, fileBase = '/api/files/', plain = false } = $props();
+	let {
+		assignment,
+		canEdit,
+		students = [],
+		groups = [],
+		progress = {},
+		teachers = [],
+		share = null,
+		fileBase = '/api/files/',
+		plain = false,
+		home = false,
+		startEditing = false
+	} = $props();
 	// plain: geteilte Seite ohne Anmeldung – keine Knöpfe, auf dem Handy ohne Kartenrahmen und Bilder unter dem Text.
+	// home: Startseite (aktiver Auftrag) – ein neuer Auftrag wird dort gleich gezeigt; sonst Seite eines Auftrags.
+	// startEditing: gleich im Editor öffnen (✎ in der Übersicht, „+ Neuer Auftrag“).
+
+	/** Klassen der Lehrkraft für die Zuordnung im Editor. */
+	const classes = $derived(/** @type {{ id: number, name: string, color: string }[]} */ (page.data.classes ?? []));
 
 	// Teilen per QR-Code; der kleine QR-Code in der Ecke gilt pro Gerät (z. B. am Beamer).
 	let shareOpen = $state(false);
@@ -59,6 +78,9 @@
 	let title = $state('');
 	/** @type {number[]} */
 	let images = $state([]);
+	/** @type {number[]} */
+	let classIds = $state([]);
+	let date = $state('');
 	let saving = $state(false);
 	let uploading = $state(0);
 	let error = $state('');
@@ -109,7 +131,8 @@
 
 	onMount(() => {
 		mounted = true;
-		theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+		if (startEditing && canEdit) startEdit();
+		theme =document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
 		try {
 			const stored = Number(localStorage.getItem(SCALE_KEY));
 			if (stored >= SCALES[0] && stored <= SCALES[SCALES.length - 1]) scale = stored;
@@ -213,6 +236,10 @@
 	async function startEdit() {
 		title = assignment.title;
 		images = [...assignment.images];
+		// Neuer Auftrag: für die aktive Klasse vorgewählt.
+		const activeClassId = page.data.activeClass?.id;
+		classIds = assignment.id ? [...(assignment.classIds ?? [])] : activeClassId ? [activeClassId] : [];
+		date = assignment.date ?? '';
 		error = '';
 		lastRange = null;
 		editing = true;
@@ -225,14 +252,31 @@
 		saving = true;
 		error = '';
 		try {
-			await api('/api/assignment', 'PUT', { title, html: editorEl?.innerHTML ?? '', images });
-			await invalidateAll();
+			const body = { title, html: editorEl?.innerHTML ?? '', images, classIds, date };
+			if (assignment.id) {
+				await api(`/api/assignments/${assignment.id}`, 'PUT', body);
+				await invalidateAll();
+			} else {
+				const created = await api('/api/assignments', 'POST', body);
+				if (home) {
+					await api(`/api/assignments/${created.id}/show`, 'POST');
+					await invalidateAll();
+				} else {
+					await goto(`/auftraege/${created.id}`, { replaceState: true, invalidateAll: true });
+				}
+			}
 			editing = false;
 		} catch (err) {
 			error = err instanceof Error ? err.message : String(err);
 		} finally {
 			saving = false;
 		}
+	}
+
+	function cancel() {
+		editing = false;
+		// Neuer Auftrag abgebrochen: zurück zur Übersicht.
+		if (!assignment.id && !home) goto('/auftraege');
 	}
 
 	async function remove() {
@@ -244,12 +288,39 @@
 		});
 		if (!ok) return;
 		try {
-			await api('/api/assignment', 'DELETE');
+			await api(`/api/assignments/${assignment.id}`, 'DELETE');
 			editing = false;
+			if (!home) await goto('/auftraege');
 		} catch (err) {
 			showError(err);
 		}
 		await invalidateAll();
+	}
+
+	/** Archivieren bzw. zurückholen – danach zur Übersicht. */
+	async function toggleArchived() {
+		try {
+			await api(`/api/assignments/${assignment.id}`, 'PUT', { archived: !assignment.archived });
+			editing = false;
+			await goto('/auftraege', { invalidateAll: true });
+		} catch (err) {
+			showError(err);
+		}
+	}
+
+	/** „Zeigen“: aktiv machen, dann am Beamer (Startseite). */
+	async function show() {
+		try {
+			await api(`/api/assignments/${assignment.id}/show`, 'POST');
+			await goto('/', { invalidateAll: true });
+		} catch (err) {
+			showError(err);
+		}
+	}
+
+	/** @param {number} id */
+	function toggleClass(id) {
+		classIds = classIds.includes(id) ? classIds.filter((c) => c !== id) : [...classIds, id];
 	}
 
 	// --- Formatierung ---
@@ -509,6 +580,11 @@
 		<span class="label">{editing ? 'Auftrag bearbeiten' : 'Auftrag'}</span>
 		{#if !editing}
 			<div class="tools">
+				{#if canEdit && assignment.id && !assignment.active}
+					<button class="tool show" onclick={show} title="Diesen Auftrag am Beamer und für die Schüler aktiv machen">
+						▶ Zeigen
+					</button>
+				{/if}
 				{#if canEdit && stepTexts.length > 0}
 					<button class="tool accent" onclick={() => (goalsOpen = true)} title="Die Schritte als Ziele an die Schüler senden">
 						☑ Als Stundenziele
@@ -520,7 +596,7 @@
 						A+
 					</button>
 				{/if}
-				{#if canEdit && !isEmpty}
+				{#if canEdit && assignment.id && !isEmpty}
 					<button
 						class="tool"
 						class:on={!!share}
@@ -551,7 +627,7 @@
 						<Icon name="image" size={13} />+
 					</button>
 				{/if}
-				{#if canEdit && owners.length > 1}
+				{#if canEdit && assignment.id && teachers.length > 1}
 					<button
 						class="tool with-icon"
 						onclick={() => (transferOpen = true)}
@@ -583,8 +659,13 @@
 		{:else if editing}
 			<!-- Oben statt unter dem Editor – so muss man zum Speichern nicht scrollen. -->
 			<div class="head-actions">
-				{#if !isEmpty}<button class="text-btn danger" onclick={remove} disabled={saving}>Auftrag löschen</button>{/if}
-				<button onclick={() => (editing = false)} disabled={saving}>Abbrechen</button>
+				{#if assignment.id}
+					<button class="text-btn danger" onclick={remove} disabled={saving}>Auftrag löschen</button>
+					<button class="text-btn" onclick={toggleArchived} disabled={saving}>
+						{assignment.archived ? 'Aus dem Archiv holen' : 'Archivieren'}
+					</button>
+				{/if}
+				<button onclick={cancel} disabled={saving}>Abbrechen</button>
 				<button class="primary" onclick={save} disabled={saving || uploading > 0}>
 					{uploading > 0 ? 'Bild lädt…' : 'Speichern'}
 				</button>
@@ -596,6 +677,25 @@
 
 		{#if editing}
 			<input type="text" class="title-input" bind:value={title} placeholder="Titel, z. B. Geschichte – Das Römische Reich" maxlength="120" />
+
+			<!-- Für welche Klassen und wann – ohne Klasse bleibt der Auftrag ein Entwurf. -->
+			<div class="meta">
+				<span class="meta-label">Klassen</span>
+				<div class="class-chips" role="group" aria-label="Klassen">
+					{#each classes as c (c.id)}
+						<button type="button" class="class-chip" class:on={classIds.includes(c.id)} aria-pressed={classIds.includes(c.id)} onclick={() => toggleClass(c.id)}>
+							<span class="class-dot" style:background={c.color}></span>{c.name}
+						</button>
+					{:else}
+						<span class="meta-none">Noch keine Klasse</span>
+					{/each}
+				</div>
+				<label class="meta-date">
+					<span class="meta-label">Datum</span>
+					<input type="date" bind:value={date} aria-label="Geplantes Datum" />
+				</label>
+				{#if date}<button type="button" class="text-btn" onclick={() => (date = '')} aria-label="Datum entfernen">✕</button>{/if}
+			</div>
 
 			<div class="toolbar" role="toolbar" aria-label="Formatierung" tabindex="-1" onmousedown={keepFocus}>
 				<button class:on={active.bold} aria-pressed={active.bold} title="Fett (Strg+B)" onclick={() => exec('bold')}>
@@ -667,7 +767,13 @@
 			></div>
 		{:else if isEmpty}
 			<p class="empty">
-				{canEdit ? 'Noch kein Auftrag – über „Bearbeiten“ erstellen.' : 'Aktuell gibt es keinen Auftrag.'}
+				{#if canEdit && !assignment.id}
+					Kein Auftrag aktiv – unter <a href="/auftraege">Aufträge</a> einen zeigen oder über „Bearbeiten“ einen neuen erstellen.
+				{:else if canEdit}
+					Noch leer – über „Bearbeiten“ füllen.
+				{:else}
+					Aktuell gibt es keinen Auftrag.
+				{/if}
 			</p>
 		{:else}
 			{#if assignment.title}<h2>{assignment.title}</h2>{/if}
@@ -721,13 +827,16 @@
 	<ShareAssignment
 		bind:open={shareOpen}
 		{share}
+		assignmentId={assignment.id ?? null}
 		bind:corner={() => corner, (value) => {
 			corner = value;
 			remember(CORNER_KEY, value ? 1 : 0);
 		}}
 	/>
 	<GoalsFromAssignment bind:open={goalsOpen} steps={stepTexts} title={assignment.title} {students} {groups} />
-	{#if owners.length > 1}<AssignmentTransfer bind:open={transferOpen} {owners} />{/if}
+	{#if assignment.id && teachers.length > 1}
+		<AssignmentTransfer bind:open={transferOpen} assignment={{ id: assignment.id, title: assignment.title }} {teachers} />
+	{/if}
 {/if}
 
 {#if zoomed}
@@ -1165,7 +1274,7 @@
 
 	/* Editor füllt den restlichen Bildschirm; lange Texte scrollen im Feld statt auf der Seite. */
 	.editable {
-		height: max(200px, calc(100vh - 384px));
+		height: max(200px, calc(100vh - 430px));
 		overflow-y: auto;
 		padding: 12px 14px;
 		border: 1px solid var(--border);
@@ -1225,6 +1334,74 @@
 		padding: 6px 10px;
 		font-size: 1.1rem;
 		font-weight: 600;
+	}
+
+	/* Klassen und Datum: eine Zeile unter dem Titel. */
+	.meta {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px 10px;
+		font-size: 13px;
+	}
+
+	.meta-label {
+		color: var(--muted);
+		font-weight: 600;
+	}
+
+	.class-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 5px;
+	}
+
+	.class-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 3px 10px;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		background: transparent;
+		color: var(--muted);
+		font-size: 13px;
+	}
+
+	.class-chip.on {
+		border-color: var(--accent);
+		background: var(--accent-soft);
+		color: var(--text);
+		font-weight: 600;
+	}
+
+	.class-dot {
+		width: 8px;
+		height: 8px;
+		flex-shrink: 0;
+		border-radius: 50%;
+	}
+
+	.meta-none {
+		color: var(--muted);
+	}
+
+	.meta-date {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		margin-left: 8px;
+	}
+
+	.meta-date input {
+		padding: 3px 8px;
+		font-size: 13px;
+	}
+
+	.tool.show {
+		border-color: var(--accent);
+		background: var(--accent);
+		color: var(--on-accent);
 	}
 
 	.toolbar {

@@ -8,9 +8,9 @@
 	/**
 	 * Auftrag öffentlich teilen: ohne Link erst starten (Gültigkeit wählen), danach groß der QR-Code
 	 * mit dem Link zum Abtippen – gut scannbar am Beamer.
-	 * @type {{ open: boolean, share: import('#lib/server/share.js').Share | null, corner: boolean }}
+	 * @type {{ open: boolean, share: import('#lib/server/share.js').Share | null, assignmentId: number | null, corner: boolean }}
 	 */
-	let { open = $bindable(false), share, corner = $bindable(false) } = $props();
+	let { open = $bindable(false), share, assignmentId, corner = $bindable(false) } = $props();
 
 	const sharing = $derived(/** @type {{ publicUrl: string, days: number }} */ (page.data.sharing));
 	const choices = $derived(dayChoices(sharing.days));
@@ -35,7 +35,7 @@
 		busy = true;
 		error = '';
 		try {
-			await api('/api/share', method, body);
+			await api('/api/share', method, { ...body, assignment: assignmentId });
 			await invalidateAll();
 		} catch (err) {
 			error = err instanceof Error ? err.message : String(err);

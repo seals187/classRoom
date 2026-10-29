@@ -2,6 +2,18 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [0.4.5] – 2026-10-29
+
+### Neu
+- **Beliebig viele Aufträge:** Jede Lehrkraft kann so viele Aufträge anlegen, wie sie will – jeder gehört zu einer oder mehreren Klassen und hat optional ein geplantes Datum. Genau einer ist aktiv: ihn zeigen der Beamer und die Schüler
+- **Übersicht „Aufträge“** (`/auftraege`): alle Aufträge als Karten mit Klassen, Datum („Heute“, „Morgen“, „Letzte Woche“ …), Zahl der Schritte und Bilder; Filter nach Klasse, Entwürfe (ohne Klasse oder noch nie gezeigt) und Archiv. **▶ Zeigen** macht einen Auftrag aktiv, ✎ öffnet ihn im Editor, ⧉ kopiert ihn, „+ Neuer Auftrag“ legt einen an
+- **Menü:** „Aufträge“ ist aufklappbar – der aktive ist markiert, darunter „+ Neuer Auftrag“ und „Alle Aufträge ›“. Ist die Liste offen, ist die Stunden-Karte kompakt (und umgekehrt) – so passt das Menü weiter ohne Scrollen in 1280×720
+- **Editor:** Klassen (bei einem neuen Auftrag die aktive vorgewählt) und Datum wählen; „Archivieren“ bzw. „Aus dem Archiv holen“
+
+### Geändert
+- **QR-Link, „Als Stundenziele“ und „Weitergeben“ gelten pro Auftrag:** Jeder Auftrag hat seinen eigenen Link; unter „Geteilte Aufträge“ stehen alle geteilten einzeln. Weitergeben kopiert oder überträgt einen Auftrag zusätzlich zu den Aufträgen der anderen Lehrkraft (als Entwurf ohne Klassen) statt ihren zu ersetzen
+- **Update:** Beim ersten Start wird der bisherige Auftrag jeder Lehrkraft ihr erster in der Liste – aktiv, für ihre aktive Klasse und mit demselben QR-Link. Vorher ein Backup anlegen
+
 ## [0.4.4] – 2026-10-28
 
 ### Geändert
@@ -237,6 +249,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.4.5]: https://github.com/seals187/classRoom/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/seals187/classRoom/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/seals187/classRoom/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/seals187/classRoom/compare/v0.4.1...v0.4.2

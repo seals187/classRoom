@@ -1,4 +1,5 @@
 import { getConfig } from '#lib/server/config.js';
+import { listAssignmentTitles } from '#lib/server/assignment.js';
 import { manageScope, teachersOf } from '#lib/server/auth.js';
 import { countPeople, getNoiseSettings, getRooms, getSchedule, getSettings, getWarnMinutes } from '#lib/server/db.js';
 import { getBackground } from '#lib/server/backgrounds.js';
@@ -25,6 +26,8 @@ export function load({ locals }) {
 		activeClass: activeClass(owner),
 		classes: isTeacher ? listClasses(locals.user).map(({ id, name, color }) => ({ id, name, color })) : [],
 		schedule: isTeacher ? getSchedule(owner) : [],
+		// Aufträge im Menü (aufklappbar, der aktive markiert)
+		assignmentList: isTeacher ? listAssignmentTitles(owner) : [],
 		// Geteilte Aufträge (QR-Code): Adresse für den Link, Standard-Gültigkeit, Anzahl im Menü.
 		sharing: isTeacher
 			? { publicUrl: config.publicUrl, days: config.shareDays, count: listShares(locals.user).length }

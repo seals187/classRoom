@@ -1,10 +1,10 @@
 import { randomInt } from 'node:crypto';
 import { error } from '@sveltejs/kit';
-import { getAssignment, getFile } from './assignment.js';
+import { activeAssignmentId, getAssignment, getFile } from './assignment.js';
 import { getConfig } from './config.js';
 import { getDb, getSettings, getWarnMinutes } from './db.js';
 
-// Öffentlicher Link zum Auftrag (/a/<code>, QR-Code): ohne Anmeldung, nur lesen.
+// Öffentlicher Link zu einem Auftrag (/a/<code>, QR-Code): ohne Anmeldung, nur lesen. Jeder Auftrag hat seinen eigenen.
 
 /** Ohne Zeichen, die man verwechselt (0/o, 1/l/i) – der Link soll sich abtippen lassen. */
 const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
@@ -14,7 +14,7 @@ const DAY = 24 * 60 * 60 * 1000;
 const MAX_DAYS = 365;
 
 /** @typedef {{ code: string, expiresAt: number }} Share */
-/** @typedef {Share & { teacherId: number, username: string, title: string }} ShareEntry */
+/** @typedef {Share & { id: number, teacherId: number, username: string, title: string }} ShareEntry */
 
 function newCode() {
 	return Array.from({ length: CODE_LENGTH }, () => ALPHABET[randomInt(ALPHABET.length)]).join('');
@@ -30,19 +30,42 @@ function daysOf(days) {
 /** Abgelaufene Links vergessen – danach gilt der Auftrag als nicht geteilt. */
 function dropExpired() {
 	getDb()
-		.prepare('UPDATE assignments SET share_code = NULL, share_expires = NULL WHERE share_expires <= ?')
+		.prepare('UPDATE assignment_items SET share_code = NULL, share_expires = NULL WHERE share_expires <= ?')
 		.run(Date.now());
 }
 
-/** @param {number} teacherId @returns {Share | null} */
-export function getShare(teacherId) {
+/** @param {number | null} assignmentId @returns {Share | null} */
+export function getShare(assignmentId) {
+	if (!assignmentId) return null;
 	dropExpired();
 	const row = /** @type {{ code: string | null, expiresAt: number | null } | undefined} */ (
 		getDb()
-			.prepare('SELECT share_code AS code, share_expires AS expiresAt FROM assignments WHERE teacher_id = ?')
-			.get(teacherId)
+			.prepare('SELECT share_code AS code, share_expires AS expiresAt FROM assignment_items WHERE id = ?')
+			.get(assignmentId)
 	);
 	return row?.code && row.expiresAt ? { code: row.code, expiresAt: row.expiresAt } : null;
+}
+
+/**
+ * Welcher Auftrag geteilt wird: der angegebene, sonst der aktive (der eigenen bzw. – als Admin – der Lehrkraft
+ * `teacher`). Fremde nur als Admin.
+ * @param {{ id: number, isAdmin: boolean }} user
+ * @param {{ assignment?: unknown, teacher?: unknown }} input
+ */
+export function shareTarget(user, input) {
+	if (input.assignment !== undefined) {
+		const row = /** @type {{ teacherId: number } | undefined} */ (
+			getDb().prepare('SELECT teacher_id AS teacherId FROM assignment_items WHERE id = ?').get(Number(input.assignment))
+		);
+		if (!row) error(404, 'Auftrag nicht gefunden');
+		if (row.teacherId !== user.id && !user.isAdmin) error(403, 'Nur eigene Aufträge');
+		return Number(input.assignment);
+	}
+	const teacher = Number(input.teacher) || user.id;
+	if (teacher !== user.id && !user.isAdmin) error(403, 'Nur eigene Aufträge');
+	const id = activeAssignmentId(teacher);
+	if (!id) error(404, 'Es gibt keinen Auftrag zum Teilen');
+	return id;
 }
 
 /**
@@ -55,9 +78,9 @@ export function listShares(user) {
 	return /** @type {ShareEntry[]} */ (
 		getDb()
 			.prepare(
-				`SELECT a.teacher_id AS teacherId, u.username, a.title, a.share_code AS code, a.share_expires AS expiresAt
-				 FROM assignments a JOIN users u ON u.id = a.teacher_id
-				 WHERE a.share_code IS NOT NULL AND (? OR a.teacher_id = ?) ORDER BY u.username`
+				`SELECT a.id, a.teacher_id AS teacherId, u.username, a.title, a.share_code AS code, a.share_expires AS expiresAt
+				 FROM assignment_items a JOIN users u ON u.id = a.teacher_id
+				 WHERE a.share_code IS NOT NULL AND (? OR a.teacher_id = ?) ORDER BY u.username, a.id`
 			)
 			.all(user.isAdmin ? 1 : 0, user.id)
 	);
@@ -66,22 +89,20 @@ export function listShares(user) {
 /**
  * Teilen starten oder ändern. Ohne Link: neuer Code. `renew` = neuer Code (der alte gilt nicht mehr).
  * `days` = gültig ab jetzt so viele Tage (sonst bleibt der Ablauf bzw. gilt SHARE_DAYS).
- * @param {number} teacherId
+ * @param {number} assignmentId
  * @param {{ days?: unknown, renew?: unknown }} input
  */
-export function setShare(teacherId, input) {
-	const db = getDb();
-	if (!db.prepare('SELECT 1 FROM assignments WHERE teacher_id = ?').get(teacherId)) error(404, 'Es gibt keinen Auftrag zum Teilen');
-	const current = getShare(teacherId);
+export function setShare(assignmentId, input) {
+	const current = getShare(assignmentId);
 	const code = !current || input.renew === true ? newCode() : current.code;
 	const expiresAt = !current || input.days !== undefined ? Date.now() + daysOf(input.days) * DAY : current.expiresAt;
-	db.prepare('UPDATE assignments SET share_code = ?, share_expires = ? WHERE teacher_id = ?').run(code, expiresAt, teacherId);
-	return /** @type {Share} */ (getShare(teacherId));
+	getDb().prepare('UPDATE assignment_items SET share_code = ?, share_expires = ? WHERE id = ?').run(code, expiresAt, assignmentId);
+	return /** @type {Share} */ (getShare(assignmentId));
 }
 
-/** @param {number} teacherId */
-export function endShare(teacherId) {
-	getDb().prepare('UPDATE assignments SET share_code = NULL, share_expires = NULL WHERE teacher_id = ?').run(teacherId);
+/** @param {number} assignmentId */
+export function endShare(assignmentId) {
+	getDb().prepare('UPDATE assignment_items SET share_code = NULL, share_expires = NULL WHERE id = ?').run(assignmentId);
 }
 
 // --- Öffentliche Seite ---
@@ -110,32 +131,32 @@ function miss(ip) {
 	misses.set(ip, entry);
 }
 
-/** @param {string} code @returns {number | null} Lehrkraft */
-function ownerOf(code) {
+/** @param {string} code @returns {{ id: number, teacherId: number } | null} geteilter Auftrag */
+function sharedBy(code) {
 	if (!CODE.test(code)) return null;
-	const row = /** @type {{ teacherId: number } | undefined} */ (
+	const row = /** @type {{ id: number, teacherId: number } | undefined} */ (
 		getDb()
-			.prepare('SELECT teacher_id AS teacherId FROM assignments WHERE share_code = ? AND share_expires > ?')
+			.prepare('SELECT id, teacher_id AS teacherId FROM assignment_items WHERE share_code = ? AND share_expires > ?')
 			.get(code, Date.now())
 	);
-	return row?.teacherId ?? null;
+	return row ?? null;
 }
 
 /**
  * Was die öffentliche Seite zeigt: nur Titel, Text, Bilder und Links – keine Namen, Ziele oder Klasseninfos.
  * @param {string} code
  * @param {string} ip
- * @returns {{ state: 'ok', assignment: import('./assignment.js').Assignment, lesson: PublicLesson } | { state: 'gone' | 'blocked' }}
+ * @returns {{ state: 'ok', assignment: { title: string, html: string, images: number[] }, lesson: PublicLesson } | { state: 'gone' | 'blocked' }}
  */
 export function publicAssignment(code, ip) {
 	if (blocked(ip)) return { state: 'blocked' };
-	const owner = ownerOf(code);
-	if (!owner) {
+	const shared = sharedBy(code);
+	if (!shared) {
 		miss(ip);
 		return { state: 'gone' };
 	}
-	const { title, html, images } = getAssignment(owner);
-	return { state: 'ok', assignment: { title, html, images, updatedAt: null }, lesson: publicLesson(owner) };
+	const { title, html, images } = getAssignment(shared.teacherId, shared.id);
+	return { state: 'ok', assignment: { title, html, images }, lesson: publicLesson(shared.teacherId) };
 }
 
 /**
@@ -146,8 +167,8 @@ export function publicAssignment(code, ip) {
  */
 export function publicImage(code, id, ip) {
 	if (blocked(ip)) error(429, 'Zu viele ungültige Versuche');
-	const owner = ownerOf(code);
-	if (!owner || !getAssignment(owner).images.includes(id)) {
+	const shared = sharedBy(code);
+	if (!shared || !getAssignment(shared.teacherId, shared.id).images.includes(id)) {
 		miss(ip);
 		error(404, 'Bild nicht gefunden');
 	}

@@ -61,7 +61,8 @@
 		{students}
 		groups={data.groups}
 		{progress}
-		owners={data.assignmentOwners}
+		teachers={data.teachers}
+		home
 		share={data.share}
 	/>
 

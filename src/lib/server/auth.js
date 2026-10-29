@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { error } from '@sveltejs/kit';
 import { getConfig } from './config.js';
-import { deleteFilesIfUnused } from './assignment.js';
+import { deleteFilesIfUnused, teacherImages } from './assignment.js';
 import { assertUsernameFree, canSeeStudent, claimOrphans, getDb, getGoalOwner, normalizeUsername } from './db.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { activeClass, syncVisibility } from './classes.js';
@@ -393,7 +393,7 @@ export function setTeacherRights(id, input, currentUserId) {
 }
 
 /**
- * Lehrkraft mit Auftrag, Zielen, Gruppen und Bildern löschen. Ihre Schüler ohne andere Lehrkraft gehen an den Admin.
+ * Lehrkraft mit Aufträgen, Zielen, Gruppen und Bildern löschen. Ihre Schüler ohne andere Lehrkraft gehen an den Admin.
  * @param {number} id
  * @param {number} currentUserId
  */
@@ -405,17 +405,10 @@ export function deleteTeacher(id, currentUserId) {
 	);
 	if (count <= 1) error(400, 'Die letzte Lehrkraft kann nicht gelöscht werden');
 	// Dateien merken, bevor Auftrag und Hintergrund-Bilder mit der Lehrkraft verschwinden.
-	const assignment = /** @type {{ images: string } | undefined} */ (db.prepare('SELECT images FROM assignments WHERE teacher_id = ?').get(id));
+	const images = teacherImages(id);
 	const backgrounds = /** @type {{ fileId: number }[]} */ (
 		db.prepare('SELECT file_id AS fileId FROM backgrounds WHERE teacher_id = ?').all(id)
 	);
-	/** @type {number[]} */
-	let images = [];
-	try {
-		images = JSON.parse(assignment?.images ?? '[]');
-	} catch {
-		// kaputte Liste → keine Bilder
-	}
 	const { changes } = db.prepare("DELETE FROM users WHERE id = ? AND role = 'teacher'").run(id);
 	if (!changes) error(404, 'Lehrkraft nicht gefunden');
 	deleteFilesIfUnused([...images, ...backgrounds.map((b) => b.fileId)]);
