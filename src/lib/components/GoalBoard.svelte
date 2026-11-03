@@ -15,10 +15,12 @@
 	 *   kind: 'self' | 'lesson',
 	 *   collapsedByDefault?: boolean,
 	 *   title: import('svelte').Snippet,
-	 *   actions?: import('svelte').Snippet
+	 *   actions?: import('svelte').Snippet,
+	 *   dots?: Record<number, { name: string, color: string }[]> | null
 	 * }}
+	 * `dots`: Klassen je Schüler als Farbpunkte (Selbstlernen mit „Alle meine Klassen“).
 	 */
-	let { students, user, kind, collapsedByDefault = true, title, actions } = $props();
+	let { students, user, kind, collapsedByDefault = true, title, actions, dots = null } = $props();
 
 	const STORAGE_KEY = 'goalsExpanded';
 	const STALE_MINUTES = 15;
@@ -151,6 +153,7 @@
 			<StudentTile
 				student={ownStudent}
 				{kind}
+				dots={dots?.[ownStudent.id] ?? null}
 				editable
 				own
 				open={isOpen(ownStudent.id)}
@@ -171,6 +174,7 @@
 						<StudentTile
 							{student}
 							{kind}
+							dots={dots?.[student.id] ?? null}
 							editable={isTeacher || student.id === ownId}
 							own={student.id === ownId}
 							open={isOpen(student.id)}

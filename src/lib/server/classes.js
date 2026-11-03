@@ -271,6 +271,38 @@ export function activeClass(owner) {
 }
 
 /**
+ * Selbstlernen: alle eigenen Klassen statt nur der aktiven Klasse?
+ * @param {number} owner
+ */
+export function selfAllClasses(owner) {
+	return readSettings(owner, ['selfAll']).selfAll === '1';
+}
+
+/**
+ * Klassen je Schüler (Name + Farbe) für die Punkte auf den Kacheln bei „Alle meine Klassen“.
+ * @param {number} owner Lehrkraft (Admin: alle Klassen)
+ * @returns {Record<number, { name: string, color: string }[]>}
+ */
+export function studentClassDots(owner) {
+	const db = getDb();
+	const isAdmin = !!db.prepare('SELECT 1 FROM users WHERE id = ? AND is_admin = 1').get(owner);
+	const rows = /** @type {{ studentId: number, name: string, color: string }[]} */ (
+		db
+			.prepare(
+				`SELECT cs.student_id AS studentId, c.name, c.color FROM class_students cs JOIN classes c ON c.id = cs.class_id
+				 WHERE c.archived = 0
+				   AND (? OR EXISTS (SELECT 1 FROM class_teachers ct WHERE ct.class_id = c.id AND ct.teacher_id = ?))
+				 ORDER BY c.name COLLATE NOCASE`
+			)
+			.all(isAdmin ? 1 : 0, owner)
+	);
+	/** @type {Record<number, { name: string, color: string }[]>} */
+	const map = {};
+	for (const r of rows) (map[r.studentId] ??= []).push({ name: r.name, color: r.color });
+	return map;
+}
+
+/**
  * Klasse für die Stunde wählen (beim Starten).
  * @param {Viewer} viewer
  * @param {unknown} classId

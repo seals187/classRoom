@@ -263,7 +263,7 @@
 
 		{#if students}
 			<div class="class-stats">
-				<span class="label">{#if klass}<span class="kdot" style:background={klass.color}></span> <span class="kname">{klass.name}</span>{:else}Klasse{/if}</span>
+				<span class="label">{#if path === '/selbstlernen' && page.data.selfAll}<span class="kname">Alle Klassen</span>{:else if klass}<span class="kdot" style:background={klass.color}></span> <span class="kname">{klass.name}</span>{:else}Klasse{/if}</span>
 				<span class="big"><strong>{doneGoals}/{totalGoals}</strong> Ziele</span>
 				<span class="small">{finished} von {students.length} fertig</span>
 			</div>

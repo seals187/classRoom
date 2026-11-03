@@ -16,7 +16,8 @@
 	 *   onopenchange?: (open: boolean) => void,
 	 *   now?: Date | null,
 	 *   staleMinutes?: number,
-	 *   lessonStart?: number | null
+	 *   lessonStart?: number | null,
+	 *   dots?: { name: string, color: string }[] | null
 	 * }}
 	 */
 	let {
@@ -28,7 +29,8 @@
 		onopenchange,
 		now = null,
 		staleMinutes = 15,
-		lessonStart = null
+		lessonStart = null,
+		dots = null
 	} = $props();
 
 	let editing = $state(false);
@@ -112,6 +114,8 @@
 			<span class="row1">
 				<span class="chevron" aria-hidden="true">{expanded ? '▾' : '▸'}</span>
 				<span class="name">{shortName}</span>
+				<!-- „Alle meine Klassen“ im Selbstlernen: Klasse(n) als Farbpunkt -->
+				{#each dots ?? [] as d (d.name)}<span class="cdot" style:background={d.color} title="Klasse {d.name}"></span>{/each}
 				{#if own}<span class="badge">Du</span>{/if}
 				<span class="count">
 					{#if complete}<Icon name="check" size={15} />{:else}{done}/{total}{/if}
@@ -247,6 +251,13 @@
 		width: 10px;
 		color: var(--muted);
 		font-size: 11px;
+	}
+
+	.cdot {
+		flex: none;
+		width: 9px;
+		height: 9px;
+		border-radius: 50%;
 	}
 
 	.name {

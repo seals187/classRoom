@@ -4,7 +4,7 @@ import { getConfig } from './config.js';
 import { deleteFilesIfUnused, teacherImages } from './assignment.js';
 import { assertUsernameFree, canSeeStudent, claimOrphans, getDb, getGoalOwner, normalizeUsername } from './db.js';
 import { hashPassword, verifyPassword } from './password.js';
-import { activeClass, syncVisibility } from './classes.js';
+import { activeClass, selfAllClasses, syncVisibility } from './classes.js';
 
 export const SESSION_COOKIE = 'classroom_session';
 
@@ -216,6 +216,15 @@ export const scope = (locals) => ({ owner: locals.owner, all: false });
  * @returns {import('./db.js').Scope}
  */
 export const classScope = (locals) => ({ owner: locals.owner, all: false, classId: activeClass(locals.owner)?.id ?? 0 });
+
+/**
+ * Selbstlernen: Lehrkräfte sehen die aktive Klasse oder – falls gewählt – alle eigenen Klassen.
+ * Schüler sehen wie bisher die Schüler ihrer Lehrkraft.
+ * @param {App.Locals} locals
+ * @returns {import('./db.js').Scope}
+ */
+export const selfScope = (locals) =>
+	locals.user?.role !== 'teacher' || selfAllClasses(locals.owner) ? scope(locals) : classScope(locals);
 
 /**
  * Wie `scope`, aber der Admin sieht beim Verwalten immer alle Schüler.

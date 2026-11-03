@@ -2,6 +2,12 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [0.4.6] – 2026-11-03
+
+### Geändert
+- **Klasse auch ohne Stunde wählen:** Die Klassenwahl im Menü gilt sofort – nicht erst mit „Stunde starten“. Stundenziele, Selbstlernen und „Ziele an alle“ zeigen immer die gewählte Klasse, auch wenn keine Stunde läuft. Eine laufende Stunde bleibt beim Wechsel unverändert
+- **Selbstlernen zeigt die aktive Klasse:** statt aller Schüler aus allen Klassen. Oben rechts lässt sich die Klasse wechseln oder **„Alle meine Klassen“** wählen – dann trägt jede Kachel den Farbpunkt ihrer Klasse(n) und im Kopfband steht „Alle Klassen“
+
 ## [0.4.5] – 2026-10-29
 
 ### Neu
@@ -249,6 +255,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.4.6]: https://github.com/seals187/classRoom/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/seals187/classRoom/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/seals187/classRoom/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/seals187/classRoom/compare/v0.4.2...v0.4.3

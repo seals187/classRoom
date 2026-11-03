@@ -213,8 +213,9 @@
 
 	// Gespeicherte Werte als Text: ändert sich nur, wenn wirklich etwas anders gespeichert ist –
 	// nicht bei jedem Neuladen der Seite (alle 10 s), sonst springen Eingaben im Menü zurück.
+	// Die Klasse fehlt bewusst: sie wird sofort gespeichert und soll eingegebene Zeiten nicht zurücksetzen.
 	const stored = $derived(
-		JSON.stringify([settings, running, durations[0], page.data.warnMinutes, noiseSettings, schedule, page.data.activeClass])
+		JSON.stringify([settings, running, durations[0], page.data.warnMinutes, noiseSettings, schedule])
 	);
 
 	// Beim Öffnen und nach dem Speichern die gespeicherten Werte übernehmen.
@@ -280,6 +281,19 @@
 				}),
 			wasRunning ? 'Stunde aktualisiert' : 'Stunde gestartet'
 		);
+	}
+
+	// Klasse sofort speichern – auch ohne Stunde gilt sie für Stundenziele, Selbstlernen und „Ziele an alle“.
+	async function pickClass() {
+		if (!classChoice) return;
+		message = '';
+		try {
+			await api('/api/settings', 'PUT', { classId: classChoice, selfAll: false });
+			await invalidateAll();
+			message = 'Klasse gewählt';
+		} catch (err) {
+			message = err instanceof Error ? err.message : String(err);
+		}
 	}
 
 	function stopLesson() {
@@ -519,7 +533,7 @@
 										<span class="kdot" style:background={chosenClass.color}></span>
 										<!-- Klasse direkt hier wählen (keine eigene Zeile in der Karte) -->
 										{#if classes.length > 1}
-											<select class="class-pick" bind:value={classChoice} aria-label="Klasse der Stunde">
+											<select class="class-pick" bind:value={classChoice} onchange={pickClass} aria-label="Klasse">
 												{#each classes as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
 											</select>
 										{:else}{chosenClass.name}{/if}
