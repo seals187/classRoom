@@ -3,10 +3,11 @@
 	import { ui } from '#lib/ui.svelte.js';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { api } from '#lib/api.js';
-	import { ask, askText, showError } from '#lib/dialog.svelte.js';
+	import { ask, showError } from '#lib/dialog.svelte.js';
 	import { shrinkImage } from '#lib/shrink-image.js';
-	import { dashesToSteps } from '#lib/steps.js';
+	import { dashesToSteps, stepText } from '#lib/steps.js';
 	import Icon from './Icon.svelte';
+	import EditorToolbar from './EditorToolbar.svelte';
 	import GoalsFromAssignment from './GoalsFromAssignment.svelte';
 	import AssignmentTransfer from './AssignmentTransfer.svelte';
 	import ShareAssignment from './ShareAssignment.svelte';
@@ -65,15 +66,6 @@
 	// „Weitergeben“ an eine andere Lehrkraft (nur wenn es mehrere gibt)
 	let transferOpen = $state(false);
 
-	// Kein Schwarz: Normaler Text passt sich dem Theme an, festes Schwarz wäre im Dunkelmodus unlesbar.
-	const COLORS = [
-		{ name: 'Rot', value: '#d63c3c' },
-		{ name: 'Blau', value: '#3767d6' },
-		{ name: 'Grün', value: '#23905a' },
-		{ name: 'Orange', value: '#e08a00' },
-		{ name: 'Lila', value: '#8b44c9' }
-	];
-
 	let editing = $state(false);
 	let title = $state('');
 	/** @type {number[]} */
@@ -88,7 +80,8 @@
 	let editorEl = $state();
 	/** @type {HTMLInputElement | undefined} */
 	let fileInput = $state();
-	let active = $state({ bold: false, italic: false, underline: false, ul: false, ol: false });
+	/** @type {EditorToolbar | undefined} */
+	let toolbar = $state();
 
 	/** @type {string | null} */
 	let zoomed = $state(null);
@@ -206,18 +199,8 @@
 		if (!mounted || !assignment.html) return [];
 		const doc = new DOMParser().parseFromString(assignment.html, 'text/html');
 		dashesToSteps(doc.body);
-		return [...doc.querySelectorAll('body > ol > li')]
-			.map((li) => {
-				const br = [...li.childNodes].find((n) => n.nodeName === 'BR');
-				while (br?.nextSibling) br.nextSibling.remove();
-				return (li.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
-			})
-			.filter(Boolean);
+		return [...doc.querySelectorAll('body > ol:not([class]) > li')].map(stepText).filter(Boolean);
 	});
-
-	// Letzte Auswahl im Editor merken – Farbwähler und Link-Dialog nehmen sonst den Fokus mit.
-	/** @type {Range | null} */
-	let lastRange = null;
 
 	// Beim Bearbeiten Platz schaffen: Startseite blendet die Stundenziel-Leiste aus.
 	$effect(() => {
@@ -241,10 +224,10 @@
 		classIds = assignment.id ? [...(assignment.classIds ?? [])] : activeClassId ? [activeClassId] : [];
 		date = assignment.date ?? '';
 		error = '';
-		lastRange = null;
 		editing = true;
 		await tick();
 		if (editorEl) editorEl.innerHTML = assignment.html;
+		toolbar?.reset();
 		window.scrollTo({ top: 0 });
 	}
 
@@ -321,75 +304,6 @@
 	/** @param {number} id */
 	function toggleClass(id) {
 		classIds = classIds.includes(id) ? classIds.filter((c) => c !== id) : [...classIds, id];
-	}
-
-	// --- Formatierung ---
-
-	function onSelectionChange() {
-		const sel = document.getSelection();
-		if (!editing || !sel?.rangeCount || !editorEl?.contains(sel.anchorNode)) return;
-		lastRange = sel.getRangeAt(0).cloneRange();
-		/** @param {string} command */
-		const state = (command) => {
-			try {
-				return document.queryCommandState(command);
-			} catch {
-				return false;
-			}
-		};
-		active = {
-			bold: state('bold'),
-			italic: state('italic'),
-			underline: state('underline'),
-			ul: state('insertUnorderedList'),
-			ol: state('insertOrderedList')
-		};
-	}
-
-	function restoreSelection() {
-		editorEl?.focus();
-		if (!lastRange) return;
-		const sel = document.getSelection();
-		sel?.removeAllRanges();
-		sel?.addRange(lastRange);
-	}
-
-	/**
-	 * execCommand ist zwar als veraltet markiert, wird aber von allen Browsern unterstützt
-	 * und hält den Editor ohne zusätzliche Bibliothek klein.
-	 * @param {string} command
-	 * @param {string} [value]
-	 */
-	function exec(command, value) {
-		restoreSelection();
-		document.execCommand(command, false, value);
-		onSelectionChange();
-	}
-
-	/** Buttons der Leiste sollen dem Editor den Fokus (und damit die Auswahl) nicht wegnehmen. @param {MouseEvent} e */
-	function keepFocus(e) {
-		if (/** @type {HTMLElement} */ (e.target).closest('button')) e.preventDefault();
-	}
-
-	async function addLink() {
-		const url = (
-			await askText({ title: 'Link einfügen', message: 'Adresse des Links:', placeholder: 'https://…', confirmLabel: 'Einfügen' })
-		)?.trim();
-		if (!url) return;
-		if (!/^(https?:\/\/|mailto:)/i.test(url)) {
-			error = 'Links müssen mit https:// (oder http://) beginnen.';
-			return;
-		}
-		restoreSelection();
-		const sel = document.getSelection();
-		if (sel && !sel.isCollapsed) {
-			exec('createLink', url);
-		} else {
-			const a = document.createElement('a');
-			a.href = url;
-			a.textContent = url;
-			exec('insertHTML', a.outerHTML + '&nbsp;');
-		}
 	}
 
 	// --- Bilder ---
@@ -501,17 +415,88 @@
 					node.append(links);
 				}
 			}
-			for (const li of node.querySelectorAll(':scope > ol > li')) {
+			for (const li of node.querySelectorAll(':scope > ol:not([class]) > li')) {
 				if (li.querySelector(':scope > .sub')) continue;
 				const br = [...li.childNodes].find((n) => n.nodeName === 'BR');
-				if (!br?.nextSibling) continue;
+				// Zusatzzeile nur bis zu einer Unterliste.
+				const isSubEnd = (/** @type {Node | null} */ n) => !n || n.nodeName === 'UL' || n.nodeName === 'OL';
+				if (!br || isSubEnd(br.nextSibling)) continue;
 				const sub = document.createElement('span');
 				sub.className = 'sub';
-				while (br.nextSibling) sub.appendChild(br.nextSibling);
+				while (!isSubEnd(br.nextSibling)) sub.appendChild(/** @type {Node} */ (br.nextSibling));
 				br.replaceWith(sub);
 			}
+			// Video-Baustein: YouTube-Player (ohne Cookies bis zum Abspielen).
+			for (const el of node.querySelectorAll('.video[data-yt]')) {
+				const id = el.getAttribute('data-yt') ?? '';
+				if (!/^[\w-]{11}$/.test(id) || el.querySelector('iframe')) continue;
+				const frame = document.createElement('iframe');
+				frame.src = `https://www.youtube-nocookie.com/embed/${id}`;
+				frame.title = 'YouTube-Video';
+				frame.allow = 'accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen';
+				frame.allowFullscreen = true;
+				frame.referrerPolicy = 'strict-origin-when-cross-origin';
+				frame.loading = 'lazy';
+				el.replaceChildren(frame);
+			}
+			checklists(node);
 		}
 		apply();
+	}
+
+	// Checklisten: Schüler haken auf ihrem Gerät ab (im Browser gemerkt, pro Auftrag und Punkt).
+	const CHECKS_KEY = 'assignmentChecks';
+	const checkScope = $derived(`${assignment.id ?? ''}|${assignment.title}`);
+
+	/** @returns {Record<string, string[]>} */
+	function readChecks() {
+		try {
+			return JSON.parse(localStorage.getItem(CHECKS_KEY) ?? '{}') ?? {};
+		} catch {
+			return {};
+		}
+	}
+
+	/** @param {HTMLElement} node */
+	function checklists(node) {
+		const items = [...node.querySelectorAll('ul.check > li')];
+		if (!items.length) return;
+		const scope = checkScope;
+		/** @param {Element} li @param {number} i */
+		const keyOf = (li, i) => {
+			const clone = /** @type {Element} */ (li.cloneNode(true));
+			clone.querySelectorAll('ul, ol').forEach((el) => el.remove());
+			return `${i}:${(clone.textContent ?? '').trim().slice(0, 80)}`;
+		};
+		const done = new Set(readChecks()[scope] ?? []);
+		items.forEach((li, i) => {
+			const key = keyOf(li, i);
+			li.classList.toggle('done', done.has(key));
+			li.setAttribute('role', 'checkbox');
+			li.setAttribute('aria-checked', String(done.has(key)));
+			li.setAttribute('tabindex', '0');
+			const toggle = (/** @type {Event} */ e) => {
+				// Nur der eigene Punkt, nicht Links und nicht Unterpunkte.
+				const target = /** @type {HTMLElement} */ (e.target);
+				if (target.closest('a') || target.closest('li') !== li) return;
+				if (e instanceof KeyboardEvent && e.key !== ' ' && e.key !== 'Enter') return;
+				e.preventDefault();
+				const all = readChecks();
+				const set = new Set(all[scope] ?? []);
+				if (set.has(key)) set.delete(key);
+				else set.add(key);
+				all[scope] = [...set];
+				try {
+					localStorage.setItem(CHECKS_KEY, JSON.stringify(all));
+				} catch {
+					// Gilt dann nur bis zum Neuladen.
+				}
+				li.classList.toggle('done', set.has(key));
+				li.setAttribute('aria-checked', String(set.has(key)));
+			};
+			li.addEventListener('click', toggle);
+			li.addEventListener('keydown', toggle);
+		});
 	}
 
 	/**
@@ -523,10 +508,8 @@
 	function stepProgress(node, stats) {
 		/** @param {Record<string, { done: number, total: number }>} current */
 		function apply(current) {
-			for (const li of node.querySelectorAll(':scope > ol > li')) {
-				const clone = /** @type {HTMLElement} */ (li.cloneNode(true));
-				clone.querySelectorAll('.sub, .step-count').forEach((el) => el.remove());
-				const key = (clone.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+			for (const li of node.querySelectorAll(':scope > ol:not([class]) > li')) {
+				const key = stepText(li);
 				const entry = current[key];
 				let badge = li.querySelector(':scope > .step-count');
 				if (!entry || entry.total === 0) {
@@ -548,7 +531,6 @@
 	}
 </script>
 
-<svelte:document onselectionchange={onSelectionChange} />
 <svelte:window
 	onkeydown={(e) => {
 		if (e.key !== 'Escape') return;
@@ -697,62 +679,18 @@
 				{#if date}<button type="button" class="text-btn" onclick={() => (date = '')} aria-label="Datum entfernen">✕</button>{/if}
 			</div>
 
-			<div class="toolbar" role="toolbar" aria-label="Formatierung" tabindex="-1" onmousedown={keepFocus}>
-				<button class:on={active.bold} aria-pressed={active.bold} title="Fett (Strg+B)" onclick={() => exec('bold')}>
-					<strong>B</strong>
-				</button>
-				<button class:on={active.italic} aria-pressed={active.italic} title="Kursiv (Strg+I)" onclick={() => exec('italic')}>
-					<em>I</em>
-				</button>
-				<button
-					class:on={active.underline}
-					aria-pressed={active.underline}
-					title="Unterstrichen (Strg+U)"
-					onclick={() => exec('underline')}
-				>
-					<u>U</u>
-				</button>
-				<span class="sep"></span>
-				<button class:on={active.ul} aria-pressed={active.ul} title="Aufzählung" onclick={() => exec('insertUnorderedList')}>
-					• Liste
-				</button>
-				<button
-					class:on={active.ol}
-					aria-pressed={active.ol}
-					title="Nummerierte Schritte – Umschalt+Enter für eine graue Zusatzzeile"
-					onclick={() => exec('insertOrderedList')}
-				>
-					1. Schritte
-				</button>
-				<span class="sep"></span>
-				{#each COLORS as color (color.value)}
-					<button
-						class="swatch"
-						style:--swatch={color.value}
-						title={color.name}
-						aria-label="Textfarbe {color.name}"
-						onclick={() => exec('foreColor', color.value)}
-					></button>
-				{/each}
-				<label class="custom-color" title="Eigene Farbe">
-					<input type="color" aria-label="Eigene Textfarbe" onchange={(e) => exec('foreColor', e.currentTarget.value)} />
-				</label>
-				<span class="sep"></span>
-				<button title="Link einfügen" onclick={addLink}>Link</button>
-				<button title="Bild hinzufügen" onclick={() => fileInput?.click()}>Bild</button>
-				<button title="Formatierung der Auswahl entfernen" onclick={() => exec('removeFormat')}>Format löschen</button>
-				<input
-					type="file"
-					accept="image/png,image/jpeg,image/gif,image/webp"
-					multiple
-					hidden
-					bind:this={fileInput}
-					onchange={(e) => {
-						upload([...(e.currentTarget.files ?? [])]);
-						e.currentTarget.value = '';
-					}}
-				/>
-			</div>
+			<EditorToolbar bind:this={toolbar} editor={editorEl} onImage={() => fileInput?.click()} onError={(message) => (error = message)} />
+			<input
+				type="file"
+				accept="image/png,image/jpeg,image/gif,image/webp"
+				multiple
+				hidden
+				bind:this={fileInput}
+				onchange={(e) => {
+					upload([...(e.currentTarget.files ?? [])]);
+					e.currentTarget.value = '';
+				}}
+			/>
 
 			<div
 				class="content editable"
@@ -1092,13 +1030,13 @@
 	}
 
 	/* Nummerierte Liste als Schritte: Zahl im Kreis, große Zeile, graue Zusatzzeile (Umschalt+Enter). */
-	.content :global(ol) {
+	.content > :global(ol:not([class])) {
 		padding: 0;
 		list-style: none;
 		counter-reset: step;
 	}
 
-	.content :global(ol > li) {
+	.content > :global(ol:not([class]) > li) {
 		position: relative;
 		margin: 0;
 		padding: 9px 0 9px calc(58px * var(--scale, 1));
@@ -1109,11 +1047,11 @@
 		counter-increment: step;
 	}
 
-	.content :global(ol > li:last-child) {
+	.content > :global(ol:not([class]) > li:last-child) {
 		border-bottom: 0;
 	}
 
-	.content :global(ol > li::before) {
+	.content > :global(ol:not([class]) > li::before) {
 		content: counter(step);
 		position: absolute;
 		top: calc(9px + 2px * var(--scale, 1));
@@ -1130,11 +1068,11 @@
 	}
 
 	/* Fortschritt je Schritt rechts („✓ 7/11“), grün wenn alle fertig sind. */
-	.content :global(ol > li:has(> .step-count)) {
+	.content > :global(ol:not([class]) > li:has(> .step-count)) {
 		padding-right: 84px;
 	}
 
-	.content :global(ol > li > .step-count) {
+	.content > :global(ol:not([class]) > li > .step-count) {
 		position: absolute;
 		top: calc(12px + 2px * var(--scale, 1));
 		right: 0;
@@ -1148,12 +1086,12 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	.content :global(ol > li > .step-count.all) {
+	.content > :global(ol:not([class]) > li > .step-count.all) {
 		background: var(--ok-soft);
 		color: var(--ok);
 	}
 
-	.content :global(ol > li .sub) {
+	.content > :global(ol:not([class]) > li .sub) {
 		display: block;
 		margin-top: 2px;
 		color: var(--muted);
@@ -1195,6 +1133,303 @@
 
 	.content :global(.links > *) {
 		margin: 0;
+	}
+
+	/* --- Listenarten (Liste ▾) --- */
+	.content :global(ol.nums) {
+		padding-left: 1.5em;
+	}
+
+	.content :global(li::marker) {
+		color: var(--accent);
+		font-weight: 700;
+	}
+
+	.content :global(:is(ul.check, ul.arrows, ul.stars, ol.letters)) {
+		padding-left: 1.9em;
+		list-style: none;
+	}
+
+	.content :global(:is(ul.check, ul.arrows, ul.stars, ol.letters) > li) {
+		position: relative;
+	}
+
+	.content :global(:is(ul.arrows, ul.stars, ol.letters) > li::before) {
+		position: absolute;
+		left: -1.9em;
+		width: 1.5em;
+		color: var(--accent);
+		font-weight: 700;
+		text-align: center;
+	}
+
+	.content :global(ul.arrows > li::before) {
+		content: '→';
+	}
+
+	.content :global(ul.stars > li::before) {
+		content: '★';
+		color: var(--warn);
+	}
+
+	.content :global(ul.stars > li) {
+		font-weight: 600;
+	}
+
+	.content :global(ol.letters) {
+		counter-reset: letter;
+	}
+
+	.content :global(ol.letters > li) {
+		counter-increment: letter;
+	}
+
+	.content :global(ol.letters > li::before) {
+		content: counter(letter, lower-alpha) ')';
+	}
+
+	/* Checkliste: Kästchen; auf dem Gerät abhaken (siehe checklists) */
+	.content :global(ul.check > li::before) {
+		content: '';
+		position: absolute;
+		top: 0.22em;
+		left: -1.7em;
+		width: 1.05em;
+		height: 1.05em;
+		box-sizing: border-box;
+		border: 2px solid var(--accent);
+		border-radius: 0.25em;
+	}
+
+	.content :global(ul.check > li.done::before) {
+		background: var(--accent);
+	}
+
+	.content :global(ul.check > li.done::after) {
+		content: '';
+		position: absolute;
+		top: 0.36em;
+		left: -1.33em;
+		width: 0.28em;
+		height: 0.52em;
+		border: solid var(--on-accent);
+		border-width: 0 0.13em 0.13em 0;
+		transform: rotate(45deg);
+	}
+
+	.content:not(.editable) :global(ul.check > li) {
+		cursor: pointer;
+	}
+
+	.content:not(.editable) :global(ul.check > li:focus-visible) {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+		border-radius: 4px;
+	}
+
+	/* Unterlisten (Tab): etwas kleiner; in einem Schritt in normaler Schrift. */
+	.content :global(li > :is(ul, ol)) {
+		margin: 0.15em 0 0.3em;
+	}
+
+	.content > :global(ol:not([class]) > li > :is(ul, ol)) {
+		margin-top: 4px;
+		font-size: 0.72em;
+		font-weight: 400;
+		line-height: 1.4;
+	}
+
+	/* --- Bausteine --- */
+	/* Marken (Zeit, Sozialform, Profi) direkt hinter dem Text des Schritts. */
+	.content :global(.badge) {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		margin: 0 0 0 10px;
+		vertical-align: 0.2em;
+		padding: 2px 10px;
+		border-radius: 999px;
+		background: var(--accent-soft);
+		color: var(--accent);
+		font-size: calc(14px * var(--scale, 1));
+		font-weight: 700;
+		line-height: 1.5;
+		white-space: nowrap;
+		user-select: none;
+	}
+
+	.content :global(.badge.time::before) {
+		content: '⏱';
+	}
+
+	.content :global(.badge.social) {
+		background: color-mix(in srgb, var(--self-accent) 18%, transparent);
+		color: var(--self-accent);
+	}
+
+	.content :global(.badge.social::before) {
+		content: '👥';
+	}
+
+	.content :global(.badge.profi) {
+		background: var(--warn-soft);
+		color: var(--warn);
+	}
+
+	.content :global(.badge.profi::before) {
+		content: '★';
+	}
+
+	/* Kästen Material / Tipp / Wichtig: Symbol links, Titel aus dem CSS (nicht bearbeitbar). */
+	.content :global(.box) {
+		--box: var(--accent);
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		margin: 0 0 0.6em;
+		padding: 10px 16px 10px 52px;
+		border-left: 4px solid var(--box);
+		border-radius: 8px;
+		background: color-mix(in srgb, var(--box) 13%, var(--surface));
+	}
+
+	.content :global(.box::before) {
+		position: absolute;
+		top: 10px;
+		left: 16px;
+		font-size: 1.1em;
+		line-height: 1.4;
+	}
+
+	.content :global(.box::after) {
+		order: -1;
+		color: color-mix(in srgb, var(--box) 85%, var(--text));
+		font-weight: 700;
+	}
+
+	.content :global(.box > *) {
+		margin: 0;
+	}
+
+	.content :global(.box.material) {
+		--box: #e0a020;
+	}
+
+	.content :global(.box.material::before) {
+		content: '📦';
+	}
+
+	.content :global(.box.material::after) {
+		content: 'Material';
+	}
+
+	.content :global(.box.tip) {
+		--box: #2fb36d;
+	}
+
+	.content :global(.box.tip::before) {
+		content: '💡';
+	}
+
+	.content :global(.box.tip::after) {
+		content: 'Tipp';
+	}
+
+	.content :global(.box.warn) {
+		--box: #e5484d;
+	}
+
+	.content :global(.box.warn::before) {
+		content: '⚠️';
+	}
+
+	.content :global(.box.warn::after) {
+		content: 'Wichtig';
+	}
+
+	.content :global(hr) {
+		margin: 0.8em 0;
+		border: 0;
+		border-top: 2px solid var(--border);
+	}
+
+	/* Video: Player in 16:9; im Editor nur eine Karte. */
+	.content :global(.video) {
+		width: min(100%, 640px);
+		aspect-ratio: 16 / 9;
+		margin: 0 0 0.8em;
+		border-radius: 10px;
+		overflow: hidden;
+		background: #000;
+	}
+
+	.content :global(.video iframe) {
+		display: block;
+		width: 100%;
+		height: 100%;
+		border: 0;
+	}
+
+	.editable :global(.video) {
+		width: fit-content;
+		aspect-ratio: auto;
+		padding: 10px 14px;
+		background: var(--track);
+		color: var(--muted);
+		font-size: 14px;
+	}
+
+	.editable :global(.video::before) {
+		content: '▶ YouTube-Video · ';
+		color: var(--danger);
+		font-weight: 700;
+	}
+
+	/* --- Tabellen --- */
+	.content :global(table) {
+		max-width: 100%;
+		align-self: flex-start;
+		margin: 0 0 0.8em;
+		border-collapse: collapse;
+		font-size: 0.9em;
+	}
+
+	.content :global(:is(th, td)) {
+		min-width: 4em;
+		padding: 0.35em 0.7em;
+		border: 1px solid var(--border);
+		text-align: left;
+		vertical-align: top;
+	}
+
+	.editable :global(:is(th, td)) {
+		min-width: 7em;
+	}
+
+	.content :global(th) {
+		background: var(--accent-soft);
+		color: var(--accent);
+		font-weight: 700;
+	}
+
+	.content :global(.c-yellow) {
+		background: color-mix(in srgb, #f0b429 28%, var(--surface));
+	}
+
+	.content :global(.c-green) {
+		background: color-mix(in srgb, #2fb36d 25%, var(--surface));
+	}
+
+	.content :global(.c-blue) {
+		background: color-mix(in srgb, #4a7cf0 25%, var(--surface));
+	}
+
+	.content :global(.c-red) {
+		background: color-mix(in srgb, #e5484d 25%, var(--surface));
+	}
+
+	.content :global(.c-purple) {
+		background: color-mix(in srgb, #9061e8 25%, var(--surface));
 	}
 
 	.media {
@@ -1285,7 +1520,7 @@
 	}
 
 	/* Im Editor die Schritte etwas kleiner, damit mehr Text Platz hat. */
-	.editable :global(ol > li) {
+	.editable > :global(ol:not([class]) > li) {
 		font-size: 19px;
 	}
 
@@ -1402,70 +1637,6 @@
 		border-color: var(--accent);
 		background: var(--accent);
 		color: var(--on-accent);
-	}
-
-	.toolbar {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 4px;
-		padding: 5px;
-		border: 1px solid var(--border);
-		border-radius: 10px;
-		background: var(--bg);
-	}
-
-	.toolbar button {
-		min-width: 32px;
-		height: 30px;
-		padding: 0 8px;
-		font-size: 0.9rem;
-	}
-
-	.toolbar button.on {
-		background: var(--accent-soft);
-		border-color: var(--accent);
-		color: var(--accent);
-	}
-
-	.sep {
-		width: 1px;
-		height: 24px;
-		margin: 0 4px;
-		background: var(--border);
-	}
-
-	.toolbar .swatch {
-		min-width: 0;
-		width: 24px;
-		height: 24px;
-		padding: 0;
-		border-radius: 50%;
-		border: 2px solid var(--surface);
-		background: var(--swatch);
-		box-shadow: 0 0 0 1px var(--border);
-	}
-
-	.toolbar .swatch:hover {
-		box-shadow: 0 0 0 2px var(--accent);
-	}
-
-	.custom-color {
-		display: inline-grid;
-		width: 24px;
-		height: 24px;
-		border-radius: 50%;
-		overflow: hidden;
-		box-shadow: 0 0 0 1px var(--border);
-		background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
-		cursor: pointer;
-	}
-
-	.custom-color input {
-		opacity: 0;
-		width: 100%;
-		height: 100%;
-		cursor: pointer;
 	}
 
 	.help {
@@ -1605,12 +1776,12 @@
 			font-size: calc(17px * var(--scale, 1));
 		}
 
-		.content :global(ol > li) {
+		.content > :global(ol:not([class]) > li) {
 			padding-left: calc(42px * var(--scale, 1));
 			font-size: calc(19px * var(--scale, 1));
 		}
 
-		.content :global(ol > li::before) {
+		.content > :global(ol:not([class]) > li::before) {
 			width: calc(28px * var(--scale, 1));
 			height: calc(28px * var(--scale, 1));
 			font-size: calc(14px * var(--scale, 1));

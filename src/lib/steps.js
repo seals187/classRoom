@@ -77,7 +77,7 @@ export function dashesToSteps(root) {
 			continue;
 		}
 		flush();
-		if (BLOCKS.has(n.nodeName) && /** @type {Element} */ (n).querySelector(':scope > br')) {
+		if (BLOCKS.has(n.nodeName) && !(/** @type {Element} */ (n).className) && /** @type {Element} */ (n).querySelector(':scope > br')) {
 			if (toBlocks([...n.childNodes], root, n, n.nodeName.toLowerCase())) /** @type {Element} */ (n).remove();
 		}
 	}
@@ -89,11 +89,12 @@ export function dashesToSteps(root) {
 	/** @type {Element[]} */
 	let blanks = [];
 	for (const el of [...root.children]) {
-		const block = BLOCKS.has(el.nodeName);
+		// Kästen (Material, Tipp …) und Videos sind keine Zeilen.
+		const block = BLOCKS.has(el.nodeName) && !el.className;
 		if (block && MARKER.test(el.textContent ?? '')) {
 			// Direkt nach einer echten nummerierten Liste dort weiterzählen.
 			const prev = el.previousElementSibling;
-			if (!ol && prev?.nodeName === 'OL') ol = /** @type {HTMLOListElement} */ (prev);
+			if (!ol && prev?.nodeName === 'OL' && !prev.className) ol = /** @type {HTMLOListElement} */ (prev);
 			if (!ol) {
 				ol = doc.createElement('ol');
 				el.before(ol);
@@ -112,4 +113,17 @@ export function dashesToSteps(root) {
 			blanks = [];
 		}
 	}
+}
+
+/**
+ * Text eines Schritts für „Als Stundenziele“ und den Fortschritt: ohne graue Zusatzzeile
+ * (nach Umschalt+Enter), ohne Badges (Zeit, zu zweit, Profi) und ohne Unterlisten.
+ * @param {Element} li
+ */
+export function stepText(li) {
+	const clone = /** @type {Element} */ (li.cloneNode(true));
+	clone.querySelectorAll('.sub, .step-count, .badge, ul, ol').forEach((el) => el.remove());
+	const br = [...clone.childNodes].find((n) => n.nodeName === 'BR');
+	while (br?.nextSibling) br.nextSibling.remove();
+	return (clone.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
 }

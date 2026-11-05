@@ -75,12 +75,39 @@ const MARKER = /^\s*(?:[-–—•*]|\d+[.)])\s+/;
  * @param {string} html
  */
 function stepCount(html) {
+	// Schritte = Punkte einer klassenlosen <ol> ganz oben (andere Listenarten und Unterlisten zählen nicht).
 	let count = 0;
-	const rest = html.replace(/<ol[^>]*>([\s\S]*?)<\/ol>/gi, (_, inner) => {
-		count += (inner.match(/<li[\s>]/gi) ?? []).length;
-		return '<p>';
-	});
-	for (const line of rest.split(/<br\s*\/?>|<\/?(?:p|div|ul|li|h3|h4)[^>]*>/i)) {
+	let rest = '';
+	let last = 0;
+	/** @type {{ steps: boolean }[]} */
+	const stack = [];
+	let stepsStart = -1;
+	for (const m of html.matchAll(/<(\/?)(ol|ul|li)\b([^>]*)>/gi)) {
+		const [tag, closing, name, attrs] = m;
+		const at = /** @type {number} */ (m.index);
+		const lower = name.toLowerCase();
+		if (lower === 'li') {
+			if (!closing && stack.length === 1 && stack[0].steps) count++;
+			continue;
+		}
+		if (!closing) {
+			const steps = stack.length === 0 && lower === 'ol' && !/\bclass\s*=/i.test(attrs);
+			if (steps) {
+				rest += html.slice(last, at);
+				stepsStart = at;
+			}
+			stack.push({ steps });
+		} else if (stack.length) {
+			const top = /** @type {{ steps: boolean }} */ (stack.pop());
+			if (top.steps && stepsStart >= 0) {
+				rest += '<p>';
+				last = at + tag.length;
+				stepsStart = -1;
+			}
+		}
+	}
+	rest += stepsStart >= 0 ? '' : html.slice(last);
+	for (const line of rest.split(/<br\s*\/?>|<\/?(?:p|div|ul|ol|li|h3|h4|table|tr|th|td)[^>]*>/i)) {
 		const text = line.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ');
 		if (MARKER.test(text) && text.replace(MARKER, '').trim()) count++;
 	}

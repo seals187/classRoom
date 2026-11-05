@@ -4,10 +4,23 @@ const COLOR = [/^#[0-9a-f]{3,8}$/i, /^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1
 
 /** @type {sanitizeHtml.IOptions} */
 const OPTIONS = {
-	allowedTags: ['p', 'div', 'br', 'b', 'strong', 'i', 'em', 'u', 's', 'ul', 'ol', 'li', 'a', 'span', 'h3', 'h4'],
+	allowedTags: [
+		'p', 'div', 'br', 'b', 'strong', 'i', 'em', 'u', 's', 'ul', 'ol', 'li', 'a', 'span', 'h3', 'h4',
+		'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr'
+	],
 	allowedAttributes: {
 		a: ['href', 'target', 'rel'],
+		div: ['data-yt'],
 		'*': ['style']
+	},
+	// Listenarten, Kästen, Video, Badges und Zellfarben aus der Werkzeugleiste (siehe #lib/editor.js).
+	allowedClasses: {
+		ul: ['check', 'arrows', 'stars'],
+		ol: ['nums', 'letters'],
+		div: ['box', 'material', 'tip', 'warn', 'video'],
+		span: ['badge', 'time', 'social', 'profi'],
+		th: ['c-yellow', 'c-green', 'c-blue', 'c-red', 'c-purple'],
+		td: ['c-yellow', 'c-green', 'c-blue', 'c-red', 'c-purple']
 	},
 	// Nur die Formatierungen aus der Werkzeugleiste.
 	allowedStyles: {
@@ -23,7 +36,13 @@ const OPTIONS = {
 	transformTags: {
 		a: sanitizeHtml.simpleTransform('a', { target: '_blank', rel: 'noopener noreferrer' }),
 		// execCommand('foreColor') erzeugt <font color="…"> – in ein <span> mit Farbe umwandeln.
-		font: (_, attribs) => ({ tagName: 'span', attribs: attribs.color ? { style: `color: ${attribs.color}` } : {} })
+		font: (_, attribs) => ({ tagName: 'span', attribs: attribs.color ? { style: `color: ${attribs.color}` } : {} }),
+		// Video nur mit gültiger YouTube-ID; der Player wird erst beim Anzeigen eingesetzt.
+		div: (_, attribs) => {
+			if (!('data-yt' in attribs)) return { tagName: 'div', attribs };
+			const { 'data-yt': id, ...rest } = attribs;
+			return { tagName: 'div', attribs: /^[\w-]{11}$/.test(id) ? { ...rest, 'data-yt': id } : rest };
+		}
 	}
 };
 

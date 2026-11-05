@@ -2,6 +2,20 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [0.4.7] – 2026-11-05
+
+### Neu
+- **Neue Werkzeugleiste im Auftrags-Editor:** Absatz ▾ · B I U · Liste ▾ · Link · Bild · Tabelle · + Baustein ▾ · ↶ ↷. Absatz, Überschrift und Unterüberschrift sowie Textfarben und „Format löschen“ stehen im Menü „Absatz“
+- **Listenarten:** Punkte, Nummern, Schritte (groß am Beamer, wie bisher), Checkliste, Buchstaben a) b) c), Pfeile und Wichtig ★. **Unterlisten** in jeder Listenart: Tab rückt ein, Umschalt+Tab wieder aus; unter Schritten werden es Teilaufgaben a) b) c). Die Art einer Unterliste lässt sich eigens ändern
+- **Checkliste:** Schüler haken Punkte auf ihrem Gerät ab (z. B. auf der geteilten Seite); das Häkchen bleibt im Browser gespeichert
+- **Tabellen:** Größe im Raster wählen, farbige Kopfzeile, kleine Leiste unter der Tabelle (+/− Zeile, +/− Spalte, Kopfzeile, Zellen färben, Tabelle löschen); Tab springt zur nächsten Zelle, nach der letzten kommt eine neue Zeile
+- **Bausteine** (auch per „/“ im Text): Kästen Material, Tipp und Wichtig; Zeitangabe, Sozialform (einzeln, zu zweit, Gruppe) und Profi-Aufgabe als Marke direkt hinter dem Text des Schritts; YouTube-Video als Player; Trennlinie
+- **Rückgängig/Wiederholen** (↶ ↷, Strg+Z / Strg+Y) für alle Änderungen im Editor
+
+### Geändert
+- „Als Stundenziele“ und der Fortschritt pro Schritt übernehmen nur den Text des Schritts – ohne Marken und Unterlisten
+- Enter in einem leeren Listenpunkt beendet die Liste mit einem normalen Absatz (vorher blieb die fette Schritt-Schrift hängen)
+
 ## [0.4.6] – 2026-11-03
 
 ### Geändert
@@ -255,6 +269,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.4.7]: https://github.com/seals187/classRoom/compare/v0.4.6...v0.4.7
 [0.4.6]: https://github.com/seals187/classRoom/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/seals187/classRoom/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/seals187/classRoom/compare/v0.4.3...v0.4.4
