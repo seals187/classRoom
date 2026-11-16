@@ -16,7 +16,7 @@
   "dependencies": {
     "better-sqlite3": "^13.0.3",
     "qrcode-generator": "^2.0.4",
-    "sanitize-html": "^2.13.0"
+    "sanitize-html": "^2.18.2"
   },
   "devDependencies": {
     "@sveltejs/adapter-node": "^6.0.0",
