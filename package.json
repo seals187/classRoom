@@ -19,7 +19,7 @@
     "better-sqlite3": "^13.0.3",
     "linkedom": "^0.18.15",
     "qrcode-generator": "^2.0.4",
-    "sanitize-html": "^2.13.0"
+    "sanitize-html": "^2.18.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
