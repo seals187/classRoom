@@ -3,7 +3,9 @@
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api.js';
-	import { formatClock, lessonSpan, minutesBetween, OVERTIME_MS } from '#lib/time.js';
+	import { formatClock, lessonSpan, minutesBetween } from '#lib/time.js';
+	import { lessonState, planLesson } from '#lib/lesson.js';
+	import { saveLesson, stopLesson as endLesson } from '#lib/lesson-actions.js';
 	import { DAYS, DAY_NAMES, nextSlot, slotsOf, weekday } from '#lib/schedule.js';
 	import { clock } from '#lib/clock.svelte.js';
 	import Icon from './Icon.svelte';
@@ -123,13 +125,8 @@
 
 	// --- Stunden-Karte ---
 
-	// Läuft gerade eine Stunde (gespeicherte Zeiten, Beginn vorbei, Ende höchstens 15 min her)?
-	const span = $derived(lessonSpan(settings.startTime, settings.returnTime, clock.now ?? new Date()));
-	const running = $derived.by(() => {
-		const now = clock.now;
-		const { start, end } = span;
-		return !!now && !!start && !!end && start <= now && now.getTime() < end.getTime() + OVERTIME_MS;
-	});
+	// Läuft gerade eine Stunde? (siehe #lib/lesson.js – dieselbe Antwort wie im Kopfband)
+	const running = $derived(lessonState(settings, { warnMinutes: 0, goMinutes: 0 }, clock.now ?? new Date()).running);
 	const durations = $derived(/** @type {number[]} */ (page.data.lessonDurations ?? [45, 90]));
 	// Kurze Dauern plus die aus LESSON_DURATIONS (z. B. 15 · 30 · 45 · 90).
 	const chips = $derived([...new Set([15, 30, ...durations])].sort((a, b) => a - b));
@@ -267,12 +264,10 @@
 	function startLesson() {
 		const wasRunning = running;
 		const now = new Date();
-		const times = wasRunning
-			? { startTime: begin || hhmm(now), returnTime: to }
-			: { startTime: formatClock(now), returnTime: formatClock(new Date(now.getTime() + minutesBetween(from, to) * 60000)) };
+		const times = wasRunning ? { startTime: begin || hhmm(now), returnTime: to } : planLesson(now, minutesBetween(from, to));
 		run(
 			() =>
-				api('/api/settings', 'PUT', {
+				saveLesson({
 					roomName: roomChoice || settings.roomName,
 					roomChange: roomChoice !== '',
 					...times,
@@ -288,7 +283,7 @@
 		if (!classChoice) return;
 		message = '';
 		try {
-			await api('/api/settings', 'PUT', { classId: classChoice, selfAll: false });
+			await api('/api/class', 'PUT', { classId: classChoice });
 			await invalidateAll();
 			message = 'Klasse gewählt';
 		} catch (err) {
@@ -297,7 +292,7 @@
 	}
 
 	function stopLesson() {
-		run(() => api('/api/settings', 'PUT', { ...settings, startTime: '', returnTime: '' }), 'Stunde beendet');
+		run(() => endLesson(), 'Stunde beendet');
 	}
 
 	/** @param {SubmitEvent} e */

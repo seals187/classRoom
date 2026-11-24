@@ -1,6 +1,7 @@
 import { listTeachers, manageScope, requireTeacher } from '#lib/server/auth.js';
 import { listClasses, requireClass } from '#lib/server/classes.js';
-import { goalStats, listStudents, listUsernames } from '#lib/server/db.js';
+import { listStudents, listUsernames } from '#lib/server/db.js';
+import { goalStats } from '#lib/server/goals.js';
 
 // Eine Klasse: Schülerliste, rechts Lehrkräfte und Sammel-Aktionen.
 export function load({ locals, params }) {

@@ -1,129 +1,30 @@
-// Von Hand getippte Schritte („- Seite 10 lesen“, „1. …“) wie eine nummerierte Liste behandeln.
+// Fortschritt an den Schritten eines Auftrags. Was ein Schritt ist und welchen Schlüssel er hat, bestimmt der
+// Server (#lib/server/assignment-content.js): Schritte stehen als <li data-step="…"> im HTML und als
+// `assignment.steps`. Ziele aus einem Schritt tragen denselben Schlüssel (`stepKey`).
 
-/** Zeilenanfang, der einen Schritt markiert: -, –, —, •, * oder „1.“ / „1)“, danach ein Leerzeichen. */
-const MARKER = /^\s*(?:[-–—•*]|\d+[.)])\s+/;
-
-/** Elemente, die innerhalb einer Zeile stehen – alles andere ist ein eigener Block. */
-const INLINE = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'SPAN', 'FONT', 'MARK', 'CODE', 'SUB', 'SUP', 'BR']);
-const BLOCKS = new Set(['P', 'DIV']);
-
-/** @param {Node} n */
-const isInline = (n) => n.nodeType === Node.TEXT_NODE || INLINE.has(n.nodeName);
-
-/** @param {Node[]} nodes */
-function splitAtBreaks(nodes) {
-	/** @type {Node[][]} */
-	const lines = [[]];
-	for (const n of nodes) {
-		if (n.nodeName === 'BR') lines.push([]);
-		else lines[lines.length - 1].push(n);
-	}
-	return lines.filter((line) => line.some((n) => n.textContent?.trim()));
-}
-
-/** @param {Node[]} line */
-const isStep = (line) => MARKER.test(line.map((n) => n.textContent ?? '').join(''));
+/** @typedef {{ done: number, total: number }} StepCount */
 
 /**
- * Zeilen (getrennt durch <br>) in eigene Blöcke legen – aber nur, wenn darunter ein Schritt ist.
- * @param {Node[]} nodes
- * @param {Node} parent
- * @param {Node | null} ref Einfügen vor diesem Knoten
- * @param {string} tag
+ * Wie viele Schüler ein Ziel aus jedem Schritt haben und erledigt haben. Spätere Listen gewinnen
+ * (z. B. Selbstlernen zuerst, dann die Stundenziele).
+ * @param {...{ goals: { stepKey: string | null, done: boolean }[] }[]} lists
+ * @returns {Record<string, StepCount>} nach Schritt-Schlüssel
  */
-function toBlocks(nodes, parent, ref, tag) {
-	const lines = splitAtBreaks(nodes);
-	if (!lines.some(isStep)) return false;
-	const doc = /** @type {Document} */ (parent.ownerDocument);
-	for (const line of lines) {
-		const block = doc.createElement(tag);
-		block.append(...line);
-		parent.insertBefore(block, ref);
-	}
-	return true;
-}
-
-/** Das Markierungszeichen am Anfang entfernen. @param {Element} el */
-function stripMarker(el) {
-	const walker = /** @type {Document} */ (el.ownerDocument).createTreeWalker(el, NodeFilter.SHOW_TEXT);
-	for (let t = walker.nextNode(); t; t = walker.nextNode()) {
-		if (!t.textContent?.trim()) continue;
-		t.textContent = t.textContent.replace(MARKER, '');
-		return;
-	}
-}
-
-/**
- * Aufeinanderfolgende Zeilen mit „- “ oder „1. “ am Anfang in ein <ol> umbauen, damit sie als
- * Schritte erscheinen (Zahl im Kreis, Fortschritt, „Als Stundenziele“). Ändert nur den übergebenen
- * Knoten – das gespeicherte HTML bleibt unverändert.
- * @param {Element} root
- */
-export function dashesToSteps(root) {
-	const doc = /** @type {Document} */ (root.ownerDocument);
-
-	// 1. Jede Zeile ein eigener Block: lose Zeilen auf oberster Ebene und Absätze mit <br>.
-	/** @type {Node[]} */
-	let run = [];
-	const flush = () => {
-		if (run.length && toBlocks(run, root, run[run.length - 1].nextSibling, 'div')) {
-			for (const n of run) if (n.nodeName === 'BR') n.remove();
-		}
-		run = [];
-	};
-	for (const n of [...root.childNodes]) {
-		if (isInline(n)) {
-			run.push(n);
-			continue;
-		}
-		flush();
-		if (BLOCKS.has(n.nodeName) && !(/** @type {Element} */ (n).className) && /** @type {Element} */ (n).querySelector(':scope > br')) {
-			if (toBlocks([...n.childNodes], root, n, n.nodeName.toLowerCase())) /** @type {Element} */ (n).remove();
-		}
-	}
-	flush();
-
-	// 2. Aufeinanderfolgende Schritt-Zeilen zu einer Liste zusammenfassen; Leerzeilen dazwischen fallen weg.
-	/** @type {HTMLOListElement | null} */
-	let ol = null;
-	/** @type {Element[]} */
-	let blanks = [];
-	for (const el of [...root.children]) {
-		// Kästen (Material, Tipp …) und Videos sind keine Zeilen.
-		const block = BLOCKS.has(el.nodeName) && !el.className;
-		if (block && MARKER.test(el.textContent ?? '')) {
-			// Direkt nach einer echten nummerierten Liste dort weiterzählen.
-			const prev = el.previousElementSibling;
-			if (!ol && prev?.nodeName === 'OL' && !prev.className) ol = /** @type {HTMLOListElement} */ (prev);
-			if (!ol) {
-				ol = doc.createElement('ol');
-				el.before(ol);
+export function countByStep(...lists) {
+	/** @type {Record<string, StepCount>} */
+	const result = {};
+	for (const list of lists) {
+		/** @type {Record<string, StepCount>} */
+		const counts = {};
+		for (const student of list) {
+			for (const goal of student.goals) {
+				if (!goal.stepKey) continue;
+				const entry = (counts[goal.stepKey] ??= { done: 0, total: 0 });
+				entry.total++;
+				if (goal.done) entry.done++;
 			}
-			blanks.forEach((b) => b.remove());
-			blanks = [];
-			const li = doc.createElement('li');
-			li.append(...el.childNodes);
-			stripMarker(li);
-			ol.append(li);
-			el.remove();
-		} else if (ol && block && !el.textContent?.trim() && !el.querySelector('img')) {
-			blanks.push(el);
-		} else {
-			ol = null;
-			blanks = [];
 		}
+		Object.assign(result, counts);
 	}
-}
-
-/**
- * Text eines Schritts für „Als Stundenziele“ und den Fortschritt: ohne graue Zusatzzeile
- * (nach Umschalt+Enter), ohne Badges (Zeit, zu zweit, Profi) und ohne Unterlisten.
- * @param {Element} li
- */
-export function stepText(li) {
-	const clone = /** @type {Element} */ (li.cloneNode(true));
-	clone.querySelectorAll('.sub, .step-count, .badge, ul, ol').forEach((el) => el.remove());
-	const br = [...clone.childNodes].find((n) => n.nodeName === 'BR');
-	while (br?.nextSibling) br.nextSibling.remove();
-	return (clone.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+	return result;
 }

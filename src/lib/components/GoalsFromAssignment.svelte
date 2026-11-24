@@ -11,7 +11,7 @@
 	 * Gruppen lassen sich hier anlegen, bearbeiten und löschen; sie bleiben gespeichert.
 	 * @type {{
 	 *   open: boolean,
-	 *   steps: string[],
+	 *   steps: { key: string, text: string }[],
 	 *   title?: string,
 	 *   students: { id: number, firstName: string, lastName: string }[],
 	 *   groups?: import('#lib/server/groups.js').Group[]
@@ -38,7 +38,7 @@
 	let groupId = $state(null);
 	/** @type {number[]} */
 	let pickedStudents = $state([]);
-	/** @type {{ key: number, text: string, on: boolean }[]} */
+	/** stepKey: Schritt, aus dem die Zeile stammt (bleibt beim Umformulieren). @type {{ key: number, text: string, on: boolean, stepKey: string | null }[]} */
 	let rows = $state([]);
 	let replace = $state(false);
 	let busy = $state(false);
@@ -65,7 +65,7 @@
 	// Feste Reihenfolge nach Vornamen (keine Sortier-Optionen).
 	const sorted = $derived([...students].sort((a, b) => a.firstName.localeCompare(b.firstName, 'de')));
 	const byId = $derived(new Map(students.map((s) => [s.id, s])));
-	const goals = $derived(rows.filter((r) => r.on && r.text.trim()).map((r) => r.text.trim()));
+	const goals = $derived(rows.filter((r) => r.on && r.text.trim()).map((r) => ({ text: r.text.trim(), stepKey: r.stepKey })));
 	const group = $derived(groups.find((g) => g.id === groupId) ?? null);
 	const recipientIds = $derived(
 		target === 'all' ? null : target === 'group' ? (group?.studentIds.filter((id) => byId.has(id)) ?? []) : pickedStudents
@@ -78,7 +78,7 @@
 	$effect(() => {
 		if (!open) return;
 		untrack(() => {
-			rows = steps.map((text) => ({ key: nextKey++, text, on: true }));
+			rows = steps.map((s) => ({ key: nextKey++, text: s.text, on: true, stepKey: s.key }));
 			view = 'send';
 			kind = 'lesson';
 			target = 'all';
@@ -106,7 +106,7 @@
 	}
 
 	async function addRow() {
-		rows.push({ key: nextKey++, text: '', on: true });
+		rows.push({ key: nextKey++, text: '', on: true, stepKey: null });
 		await tick();
 		listEl?.querySelector(`[data-key="${rows[rows.length - 1].key}"] input[type='text']`)?.focus();
 	}
@@ -194,7 +194,7 @@
 		try {
 			const result = await api('/api/goals', 'POST', {
 				kind,
-				texts: goals,
+				goals,
 				replace,
 				studentIds: recipientIds ?? undefined
 			});

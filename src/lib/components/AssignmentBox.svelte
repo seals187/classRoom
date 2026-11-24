@@ -5,7 +5,7 @@
 	import { api } from '#lib/api.js';
 	import { ask, showError } from '#lib/dialog.svelte.js';
 	import { shrinkImage } from '#lib/shrink-image.js';
-	import { dashesToSteps, stepText } from '#lib/steps.js';
+	import { decorateAssignment, nextLevel, showStepProgress } from '#lib/assignment-display.js';
 	import Icon from './Icon.svelte';
 	import EditorToolbar from './EditorToolbar.svelte';
 	import GoalsFromAssignment from './GoalsFromAssignment.svelte';
@@ -119,11 +119,8 @@
 			// Gilt dann nur bis zum Neuladen.
 		}
 	}
-	// Erst im Browser (DOMParser) – sonst passt das Server-HTML nicht zum Client.
-	let mounted = $state(false);
 
 	onMount(() => {
-		mounted = true;
 		if (startEditing && canEdit) startEdit();
 		theme =document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
 		try {
@@ -149,19 +146,6 @@
 			narrow.removeEventListener('change', onNarrow);
 		};
 	});
-
-	/**
-	 * Eine Stufe größer (+1) oder kleiner (−1); Zwischenwerte (alte Einstellung) springen zur nächsten Stufe.
-	 * @param {number[]} levels
-	 * @param {number} current
-	 * @param {number} dir
-	 */
-	function nextLevel(levels, current, dir) {
-		const i = levels.findIndex((v) => v >= current);
-		const at = i === -1 ? levels.length - 1 : i;
-		const target = levels[at] > current && dir > 0 ? at : at + dir;
-		return levels[Math.min(levels.length - 1, Math.max(0, target))];
-	}
 
 	/** @param {string} key @param {number} value */
 	function remember(key, value) {
@@ -194,13 +178,8 @@
 		else sectionEl?.requestFullscreen().catch(() => {});
 	}
 
-	/** Haupttext der Schritte (ohne graue Zusatzzeile) – Grundlage für „Als Stundenziele“. */
-	const stepTexts = $derived.by(() => {
-		if (!mounted || !assignment.html) return [];
-		const doc = new DOMParser().parseFromString(assignment.html, 'text/html');
-		dashesToSteps(doc.body);
-		return [...doc.querySelectorAll('body > ol:not([class]) > li')].map(stepText).filter(Boolean);
-	});
+	/** Schritte des Auftrags (vom Server erkannt) – Grundlage für „Als Stundenziele“. */
+	const stepList = $derived(assignment.steps ?? []);
 
 	// Beim Bearbeiten Platz schaffen: Startseite blendet die Stundenziel-Leiste aus.
 	$effect(() => {
@@ -377,157 +356,23 @@
 		upload([...(e.dataTransfer?.files ?? [])]);
 	}
 
-	/**
-	 * Schritte der nummerierten Liste (auch von Hand mit „- “ getippt): Text nach dem ersten
-	 * Zeilenumbruch (Umschalt+Enter) als graue Zusatzzeile anzeigen. Nur fürs Anzeigen –
-	 * gespeichert bleibt das HTML unverändert.
-	 * @param {HTMLElement} node
-	 */
-	function steps(node) {
-		function apply() {
-			dashesToSteps(node);
-			// Links: nur die Adresse ohne https:// und www. zeigen, wenn der Text die Adresse selbst ist.
-			for (const a of node.querySelectorAll('a')) {
-				const href = a.getAttribute('href') ?? '';
-				if (a.textContent?.trim() !== href) continue;
-				a.textContent = href.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '');
-			}
-			// Absätze am Ende, die nur Links enthalten, unten in der Karte sammeln.
-			if (!node.querySelector(':scope > .links')) {
-				/** @param {Element} el */
-				const onlyLinks = (el) =>
-					el.querySelector('a') !== null &&
-					[...el.childNodes].every((n) => n.nodeName === 'A' || n.nodeName === 'BR' || !n.textContent?.trim());
-				/** @param {Element} el */
-				const blank = (el) => !el.textContent?.trim() && !el.querySelector('img');
-				const tail = [];
-				let el = node.lastElementChild;
-				while (el && (onlyLinks(el) || blank(el))) {
-					const prev = el.previousElementSibling;
-					if (onlyLinks(el)) tail.unshift(el);
-					else el.remove();
-					el = prev;
-				}
-				if (tail.length) {
-					const links = document.createElement('div');
-					links.className = 'links';
-					links.append(...tail);
-					node.append(links);
-				}
-			}
-			for (const li of node.querySelectorAll(':scope > ol:not([class]) > li')) {
-				if (li.querySelector(':scope > .sub')) continue;
-				const br = [...li.childNodes].find((n) => n.nodeName === 'BR');
-				// Zusatzzeile nur bis zu einer Unterliste.
-				const isSubEnd = (/** @type {Node | null} */ n) => !n || n.nodeName === 'UL' || n.nodeName === 'OL';
-				if (!br || isSubEnd(br.nextSibling)) continue;
-				const sub = document.createElement('span');
-				sub.className = 'sub';
-				while (!isSubEnd(br.nextSibling)) sub.appendChild(/** @type {Node} */ (br.nextSibling));
-				br.replaceWith(sub);
-			}
-			// Video-Baustein: YouTube-Player (ohne Cookies bis zum Abspielen).
-			for (const el of node.querySelectorAll('.video[data-yt]')) {
-				const id = el.getAttribute('data-yt') ?? '';
-				if (!/^[\w-]{11}$/.test(id) || el.querySelector('iframe')) continue;
-				const frame = document.createElement('iframe');
-				frame.src = `https://www.youtube-nocookie.com/embed/${id}`;
-				frame.title = 'YouTube-Video';
-				frame.allow = 'accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen';
-				frame.allowFullscreen = true;
-				frame.referrerPolicy = 'strict-origin-when-cross-origin';
-				frame.loading = 'lazy';
-				el.replaceChildren(frame);
-			}
-			checklists(node);
-		}
-		apply();
-	}
-
-	// Checklisten: Schüler haken auf ihrem Gerät ab (im Browser gemerkt, pro Auftrag und Punkt).
-	const CHECKS_KEY = 'assignmentChecks';
+	// Anzeige: kurze Links, Links am Ende, Zusatzzeilen, Video, Checklisten (siehe #lib/assignment-display.js).
+	// Die Häkchen der Checklisten gelten pro Auftrag.
 	const checkScope = $derived(`${assignment.id ?? ''}|${assignment.title}`);
 
-	/** @returns {Record<string, string[]>} */
-	function readChecks() {
-		try {
-			return JSON.parse(localStorage.getItem(CHECKS_KEY) ?? '{}') ?? {};
-		} catch {
-			return {};
-		}
-	}
-
 	/** @param {HTMLElement} node */
-	function checklists(node) {
-		const items = [...node.querySelectorAll('ul.check > li')];
-		if (!items.length) return;
-		const scope = checkScope;
-		/** @param {Element} li @param {number} i */
-		const keyOf = (li, i) => {
-			const clone = /** @type {Element} */ (li.cloneNode(true));
-			clone.querySelectorAll('ul, ol').forEach((el) => el.remove());
-			return `${i}:${(clone.textContent ?? '').trim().slice(0, 80)}`;
-		};
-		const done = new Set(readChecks()[scope] ?? []);
-		items.forEach((li, i) => {
-			const key = keyOf(li, i);
-			li.classList.toggle('done', done.has(key));
-			li.setAttribute('role', 'checkbox');
-			li.setAttribute('aria-checked', String(done.has(key)));
-			li.setAttribute('tabindex', '0');
-			const toggle = (/** @type {Event} */ e) => {
-				// Nur der eigene Punkt, nicht Links und nicht Unterpunkte.
-				const target = /** @type {HTMLElement} */ (e.target);
-				if (target.closest('a') || target.closest('li') !== li) return;
-				if (e instanceof KeyboardEvent && e.key !== ' ' && e.key !== 'Enter') return;
-				e.preventDefault();
-				const all = readChecks();
-				const set = new Set(all[scope] ?? []);
-				if (set.has(key)) set.delete(key);
-				else set.add(key);
-				all[scope] = [...set];
-				try {
-					localStorage.setItem(CHECKS_KEY, JSON.stringify(all));
-				} catch {
-					// Gilt dann nur bis zum Neuladen.
-				}
-				li.classList.toggle('done', set.has(key));
-				li.setAttribute('aria-checked', String(set.has(key)));
-			};
-			li.addEventListener('click', toggle);
-			li.addEventListener('keydown', toggle);
-		});
+	function display(node) {
+		decorateAssignment(node, { checkScope });
 	}
 
 	/**
-	 * An jedem Schritt: wie viele Schüler ihn als Ziel erledigt haben (z. B. „7/11“).
-	 * Läuft nach `steps` und aktualisiert sich mit jedem Neuladen der Daten.
+	 * An jedem Schritt: wie viele Schüler ihn als Ziel erledigt haben (z. B. „7/11“) – auch nach jedem Neuladen.
 	 * @param {HTMLElement} node
 	 * @param {Record<string, { done: number, total: number }>} stats
 	 */
 	function stepProgress(node, stats) {
-		/** @param {Record<string, { done: number, total: number }>} current */
-		function apply(current) {
-			for (const li of node.querySelectorAll(':scope > ol:not([class]) > li')) {
-				const key = stepText(li);
-				const entry = current[key];
-				let badge = li.querySelector(':scope > .step-count');
-				if (!entry || entry.total === 0) {
-					badge?.remove();
-					continue;
-				}
-				if (!badge) {
-					badge = document.createElement('span');
-					badge.className = 'step-count';
-					li.append(badge);
-				}
-				badge.classList.toggle('all', entry.done === entry.total);
-				badge.textContent = `✓ ${entry.done}/${entry.total}`;
-				badge.setAttribute('title', `${entry.done} von ${entry.total} Schülern erledigt`);
-			}
-		}
-		apply(stats);
-		return { update: apply };
+		showStepProgress(node, stats);
+		return { update: (/** @type {Record<string, { done: number, total: number }>} */ next) => showStepProgress(node, next) };
 	}
 </script>
 
@@ -567,7 +412,7 @@
 						▶ Zeigen
 					</button>
 				{/if}
-				{#if canEdit && stepTexts.length > 0}
+				{#if canEdit && stepList.length > 0}
 					<button class="tool accent" onclick={() => (goalsOpen = true)} title="Die Schritte als Ziele an die Schüler senden">
 						☑ Als Stundenziele
 					</button>
@@ -717,7 +562,7 @@
 			{#if assignment.title}<h2>{assignment.title}</h2>{/if}
 			<!-- Bei neuem Text komplett neu aufbauen – steps verschiebt Knoten, die @html sonst nicht mehr findet. -->
 			{#key assignment.html}
-				<div class="content" use:steps use:stepProgress={progress}>{@html assignment.html}</div>
+				<div class="content" use:display use:stepProgress={progress}>{@html assignment.html}</div>
 			{/key}
 		{/if}
 	</div>
@@ -771,7 +616,7 @@
 			remember(CORNER_KEY, value ? 1 : 0);
 		}}
 	/>
-	<GoalsFromAssignment bind:open={goalsOpen} steps={stepTexts} title={assignment.title} {students} {groups} />
+	<GoalsFromAssignment bind:open={goalsOpen} steps={stepList} title={assignment.title} {students} {groups} />
 	{#if assignment.id && teachers.length > 1}
 		<AssignmentTransfer bind:open={transferOpen} assignment={{ id: assignment.id, title: assignment.title }} {teachers} />
 	{/if}

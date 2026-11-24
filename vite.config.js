@@ -15,5 +15,10 @@ export default defineConfig(({ mode }) => ({
 	],
 	server: {
 		port: Number(loadEnv(mode, process.cwd(), '').PORT) || 3000
+	},
+	// Tests (npm test): jede Testdatei bekommt eine eigene Datenbank im Speicher.
+	test: {
+		include: ['src/**/*.test.js'],
+		env: { DATABASE_PATH: ':memory:', TZ: 'Europe/Zurich' }
 	}
 }));

@@ -4,9 +4,10 @@
 	import { clock } from '#lib/clock.svelte.js';
 	import { noise, startNoise, stopNoise, wantsAutoStart, watchRemoteNoise } from '#lib/noise.svelte.js';
 	import { invalidateAll } from '$app/navigation';
-	import { api } from '#lib/api.js';
 	import { showError } from '#lib/dialog.svelte.js';
-	import { formatClock, lessonEnded, lessonSpan, minutesBetween, pad } from '#lib/time.js';
+	import { minutesBetween, pad } from '#lib/time.js';
+	import { bigRemaining, lessonState } from '#lib/lesson.js';
+	import { startLessonNow } from '#lib/lesson-actions.js';
 	import { nextSlot } from '#lib/schedule.js';
 	import logo from '#lib/assets/logo.svg';
 	import Icon from './Icon.svelte';
@@ -44,30 +45,19 @@
 	const showLight = $derived(noiseEnabled && (isTeacher || noise.active));
 
 	let menuOpen = $state(false);
-
 	const now = $derived(clock.now);
-	// Auch über Mitternacht richtig (z. B. 23:30 bis 00:15).
-	const span = $derived(now ? lessonSpan(settings.startTime, settings.returnTime, now) : { start: null, end: null });
-	const start = $derived(span.start);
-	const end = $derived(span.end);
-	// 15 min nach dem Ende ist die Stunde von selbst vorbei – dann wieder „Stunde starten“.
-	const ended = $derived(!!now && lessonEnded(span, now));
+	// Zustand der Stunde (Phase, Restzeit, Fortschritt; auch über Mitternacht) – siehe #lib/lesson.js.
+	const lesson = $derived(now ? lessonState(settings, { warnMinutes, goMinutes }, now) : null);
+	// Zeitbalken: solange eine Stunde läuft oder gleich beginnt; 15 min nach dem Ende wieder „Stunde starten“.
+	const shown = $derived(!!lesson && lesson.phase !== 'none');
+	const start = $derived(lesson?.start ?? null);
+	const end = $derived(lesson?.end ?? null);
+	const remaining = $derived(lesson?.remaining ?? null);
+	const progress = $derived(lesson?.progress ?? 0);
 	const elapsed = $derived(now && start ? Math.max(0, now.getTime() - start.getTime()) : 0);
-	const remaining = $derived(now && end ? end.getTime() - now.getTime() : null);
 	const total = $derived(start && end && end > start ? end.getTime() - start.getTime() : null);
-	const progress = $derived(remaining !== null && remaining <= 0 ? 1 : total ? Math.min(1, elapsed / total) : 0);
-	// Vier Phasen: arbeiten → aufräumen (WARN_MINUTES) → losgehen (GO_MINUTES) → Zeit um.
-	const status = $derived(
-		remaining === null || ended
-			? ''
-			: remaining <= 0
-				? 'over'
-				: remaining <= goMinutes * 60000
-					? 'go'
-					: remaining <= warnMinutes * 60000
-						? 'soon'
-						: ''
-	);
+	// Farbe des Balkens: arbeiten (bzw. noch nicht begonnen) ohne Klasse, sonst soon / go / over.
+	const status = $derived(lesson && ['soon', 'go', 'over'].includes(lesson.phase) ? lesson.phase : '');
 	// Losgehen und Zeit um: groß in der Mitte, mit Tür, wenn es in einen anderen Raum geht.
 	const callout = $derived(status === 'go' || status === 'over');
 	const phase = $derived(
@@ -81,16 +71,13 @@
 					: 'Gleich Schluss – zusammenpacken'
 				: status === 'soon'
 					? 'Aufräumen'
-					: now && start && now < start
+					: lesson?.phase === 'before'
 						? `Beginnt um ${short(settings.startTime)}`
 						: 'Arbeitsphase'
 	);
-	const overMinutes = $derived(remaining !== null && remaining < 0 ? Math.floor(-remaining / 60000) : 0);
+	const overMinutes = $derived(lesson?.overMinutes ?? 0);
 	// Restzeit groß: „noch 40 min“ bzw. „noch 1:20 h“.
-	const bigRemaining = $derived.by(() => {
-		const m = remaining !== null ? Math.max(0, Math.ceil(remaining / 60000)) : 0;
-		return m < 60 ? { value: String(m), unit: 'min' } : { value: `${Math.floor(m / 60)}:${pad(m % 60)}`, unit: 'h' };
-	});
+	const big = $derived(bigRemaining(remaining));
 	// Rest des Balkens schmaler als ~ein Achtel → „noch …“ steht links vom Jetzt-Strich im farbigen Teil.
 	const leftInside = $derived(remaining !== null && remaining > 0 && progress > 0.86);
 
@@ -131,13 +118,9 @@
 	async function startLesson(minutes, slot = null) {
 		starting = true;
 		try {
-			const begin = new Date();
-			const back = new Date(begin.getTime() + minutes * 60000);
-			await api('/api/settings', 'PUT', {
+			await startLessonNow(minutes, {
 				roomName: slot?.room || settings.roomName,
-				...(slot && { roomChange: slot.room !== '' }),
-				startTime: formatClock(begin),
-				returnTime: formatClock(back)
+				...(slot && { roomChange: slot.room !== '' })
 			});
 			await invalidateAll();
 		} catch (err) {
@@ -180,7 +163,7 @@
 		</a>
 		<span class="crumb">/ Verwaltung</span>
 	{:else}
-		{#if settings.returnTime && !ended}
+		{#if shown}
 			<div class="time {status}" class:inside={leftInside}>
 				<div class="meta">
 					<span>
@@ -223,7 +206,7 @@
 							{#if remaining <= 0}
 								Zeit um{#if overMinutes > 0}{` · +${overMinutes} min`}{/if}
 							{:else}
-								noch <b>{bigRemaining.value}</b> {bigRemaining.unit}
+								noch <b>{big.value}</b> {big.unit}
 							{/if}
 						</span>
 					{/if}

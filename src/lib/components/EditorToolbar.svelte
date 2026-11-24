@@ -366,7 +366,7 @@
 		const offset = (sel?.anchorOffset ?? 0) - 1;
 		if (!node || node.nodeType !== Node.TEXT_NODE || offset < 0) return;
 		const before = node.textContent?.[offset - 1];
-		if (before !== undefined && !/\s| /.test(before)) return;
+		if (before !== undefined && !/\s|\xa0/.test(before)) return;
 		const range = document.createRange();
 		range.setStart(node, offset);
 		range.setEnd(node, offset + 1);

@@ -17,6 +17,20 @@ export const CLASS_COLORS = ['#3b6fe0', '#f08a3c', '#8b5cd6', '#2f9e64', '#e0484
  * @typedef {{ id: number, isAdmin: boolean }} Viewer
  */
 
+/**
+ * Bedingung „die Klasse `c` sieht diese Lehrkraft“ (Admin: alle) samt Parametern – die einzige Stelle dafür.
+ * @param {Viewer} viewer
+ * @returns {[string, number, number]}
+ */
+function visibleTo(viewer) {
+	return ['(? OR EXISTS (SELECT 1 FROM class_teachers ct WHERE ct.class_id = c.id AND ct.teacher_id = ?))', viewer.isAdmin ? 1 : 0, viewer.id];
+}
+
+/** Lehrkraft, von der nur die Id bekannt ist. @param {number} owner @returns {Viewer} */
+function viewerOf(owner) {
+	return { id: owner, isAdmin: !!getDb().prepare('SELECT 1 FROM users WHERE id = ? AND is_admin = 1').get(owner) };
+}
+
 /** Sichtbarkeit (student_teachers) aus den Klassen neu berechnen; „zuletzt abgehakt“ bleibt erhalten. */
 export function syncVisibility() {
 	const db = getDb();
@@ -83,15 +97,15 @@ export function migrateClasses() {
  */
 export function listClasses(viewer, { archived = false } = {}) {
 	const db = getDb();
+	const [visible, ...params] = visibleTo(viewer);
 	const rows = /** @type {{ id: number, name: string, color: string, archived: number }[]} */ (
 		db
 			.prepare(
 				`SELECT c.id, c.name, c.color, c.archived FROM classes c
-				 WHERE (? OR EXISTS (SELECT 1 FROM class_teachers ct WHERE ct.class_id = c.id AND ct.teacher_id = ?))
-				   AND (? OR c.archived = 0)
+				 WHERE ${visible} AND (? OR c.archived = 0)
 				 ORDER BY c.archived, c.name COLLATE NOCASE`
 			)
-			.all(viewer.isAdmin ? 1 : 0, viewer.id, archived ? 1 : 0)
+			.all(...params, archived ? 1 : 0)
 	);
 	const students = /** @type {(ClassStudent & { classId: number })[]} */ (
 		db
@@ -125,12 +139,11 @@ export function listClasses(viewer, { archived = false } = {}) {
  * @param {number} classId
  */
 export function requireClass(viewer, classId) {
-	const db = getDb();
+	const [visible, ...params] = visibleTo(viewer);
 	const row = /** @type {{ id: number, name: string, color: string, archived: number } | undefined} */ (
-		db.prepare('SELECT id, name, color, archived FROM classes WHERE id = ?').get(classId)
+		getDb().prepare(`SELECT c.id, c.name, c.color, c.archived FROM classes c WHERE c.id = ? AND ${visible}`).get(classId, ...params)
 	);
-	const mine = row && (viewer.isAdmin || db.prepare('SELECT 1 FROM class_teachers WHERE class_id = ? AND teacher_id = ?').get(classId, viewer.id));
-	if (!row || !mine) error(404, 'Klasse nicht gefunden');
+	if (!row) error(404, 'Klasse nicht gefunden');
 	return { ...row, archived: row.archived === 1 };
 }
 
@@ -254,19 +267,19 @@ export function resetClassPasswords(classId, viewer) {
  */
 export function activeClass(owner) {
 	const db = getDb();
-	const isAdmin = !!db.prepare("SELECT 1 FROM users WHERE id = ? AND is_admin = 1").get(owner);
 	const chosen = Number(readSettings(owner, ['classId']).classId) || 0;
-	const visible = `FROM classes c WHERE c.archived = 0
-		AND (? OR EXISTS (SELECT 1 FROM class_teachers ct WHERE ct.class_id = c.id AND ct.teacher_id = ?))`;
+	const [visible, ...params] = visibleTo(viewerOf(owner));
+	const from = `FROM classes c WHERE c.archived = 0 AND ${visible}`;
 	const row =
-		db.prepare(`SELECT c.id, c.name, c.color ${visible} AND c.id = ?`).get(isAdmin ? 1 : 0, owner, chosen) ??
+		db.prepare(`SELECT c.id, c.name, c.color ${from} AND c.id = ?`).get(...params, chosen) ??
+		// Sonst die erste eigene Klasse (der Admin sieht alle, nimmt aber zuerst seine).
 		db
 			.prepare(
-				`SELECT c.id, c.name, c.color ${visible}
+				`SELECT c.id, c.name, c.color ${from}
 				 ORDER BY EXISTS (SELECT 1 FROM class_teachers ct WHERE ct.class_id = c.id AND ct.teacher_id = ?) DESC,
 				   c.name COLLATE NOCASE LIMIT 1`
 			)
-			.get(isAdmin ? 1 : 0, owner, owner);
+			.get(...params, owner);
 	return /** @type {{ id: number, name: string, color: string } | null} */ (row ?? null);
 }
 
@@ -284,17 +297,15 @@ export function selfAllClasses(owner) {
  * @returns {Record<number, { name: string, color: string }[]>}
  */
 export function studentClassDots(owner) {
-	const db = getDb();
-	const isAdmin = !!db.prepare('SELECT 1 FROM users WHERE id = ? AND is_admin = 1').get(owner);
+	const [visible, ...params] = visibleTo(viewerOf(owner));
 	const rows = /** @type {{ studentId: number, name: string, color: string }[]} */ (
-		db
+		getDb()
 			.prepare(
 				`SELECT cs.student_id AS studentId, c.name, c.color FROM class_students cs JOIN classes c ON c.id = cs.class_id
-				 WHERE c.archived = 0
-				   AND (? OR EXISTS (SELECT 1 FROM class_teachers ct WHERE ct.class_id = c.id AND ct.teacher_id = ?))
+				 WHERE c.archived = 0 AND ${visible}
 				 ORDER BY c.name COLLATE NOCASE`
 			)
-			.all(isAdmin ? 1 : 0, owner)
+			.all(...params)
 	);
 	/** @type {Record<number, { name: string, color: string }[]>} */
 	const map = {};

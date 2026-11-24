@@ -1,11 +1,15 @@
-FROM node:26-bookworm-slim AS build
+# Abhängigkeiten (auch für scripts/test.sh: Lint und Tests ohne lokales Node)
+FROM node:26-bookworm-slim AS deps
 WORKDIR /app
-COPY package.json package-lock.json ./
-# better-sqlite3 ab v13 wird immer aus dem Quellcode gebaut → Build-Werkzeuge (nur in dieser Stufe)
+# better-sqlite3 ab v13 wird immer aus dem Quellcode gebaut → Build-Werkzeuge (nur in diesen Stufen)
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json ./
 RUN npm ci
+
+FROM deps AS build
 COPY . .
-RUN npm run build && npm prune --omit=dev
+# Lint und Tests laufen beim Bauen mit – schlägt einer fehl, entsteht kein Image.
+RUN npm run build && npm run lint && npm test && npm prune --omit=dev
 
 FROM node:26-bookworm-slim
 WORKDIR /app

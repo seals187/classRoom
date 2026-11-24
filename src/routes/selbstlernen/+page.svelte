@@ -16,7 +16,7 @@
 	async function choose(e) {
 		const v = /** @type {HTMLSelectElement} */ (e.currentTarget).value;
 		try {
-			await api('/api/settings', 'PUT', v === 'all' ? { selfAll: true } : { classId: Number(v), selfAll: false });
+			await api('/api/class', 'PUT', v === 'all' ? { all: true } : { classId: Number(v) });
 			await invalidateAll();
 		} catch (err) {
 			showError(err);

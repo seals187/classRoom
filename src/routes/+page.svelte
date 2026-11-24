@@ -3,6 +3,7 @@
 	import { autoRefresh } from '#lib/refresh.js';
 	import AssignmentBox from '#lib/components/AssignmentBox.svelte';
 	import { ui } from '#lib/ui.svelte.js';
+	import { countByStep } from '#lib/steps.js';
 
 	let { data } = $props();
 
@@ -28,24 +29,8 @@
 		return `color-mix(in srgb, var(--ok) ${Math.round(25 + p * 55)}%, var(--track))`;
 	};
 
-	/**
-	 * Wie viele Schüler ein Ziel (nach Text) haben und erledigt haben – Stundenziele vor Selbstlern-Zielen.
-	 * @param {import('#lib/server/db.js').Student[]} list
-	 */
-	function countByText(list) {
-		/** @type {Record<string, { done: number, total: number }>} */
-		const map = {};
-		for (const s of list) {
-			for (const g of s.goals) {
-				const entry = (map[g.text] ??= { done: 0, total: 0 });
-				entry.total++;
-				if (g.done) entry.done++;
-			}
-		}
-		return map;
-	}
-
-	const progress = $derived({ ...countByText(data.selfStudents ?? []), ...countByText(students) });
+	// Fortschritt pro Schritt (Schlüssel data-step) – Stundenziele vor Selbstlern-Zielen.
+	const progress = $derived(countByStep(data.selfStudents ?? [], students));
 
 	onMount(() => autoRefresh(10000));
 </script>

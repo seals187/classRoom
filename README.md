@@ -1,7 +1,7 @@
 <p align="center"><img src="assets/banner-1.png" alt="classRoom – Der Werkzeugkasten für den Unterricht" width="100%"></p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.4.7-6c8cff" alt="Version 0.4.7"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.4.8-6c8cff" alt="Version 0.4.8"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/lizenz-AGPL--3.0-3dba79" alt="Lizenz AGPL-3.0"></a>
   <img src="https://img.shields.io/badge/docker-amd64%20%7C%20arm64-2496ed" alt="Docker amd64 und arm64">
   <img src="https://img.shields.io/badge/SvelteKit-Svelte%205-ff3e00" alt="SvelteKit mit Svelte 5">
@@ -110,7 +110,7 @@ Alles steht in der `.env`; nach einer Änderung `docker compose up -d` ausführe
 | `TEACHER_USERNAME` | Benutzername des ersten Lehrerkontos (immer Admin) | `lehrer` |
 | `TEACHER_PASSWORD` | Passwort dazu – **muss gesetzt werden** (mind. 8 Zeichen) | – |
 | `PORT` | Port, unter dem classRoom erreichbar ist | `3000` |
-| `CLASSROOM_VERSION` | Image-Version, z. B. `0.4.7` | `latest` |
+| `CLASSROOM_VERSION` | Image-Version, z. B. `0.4.8` | `latest` |
 
 <details>
 <summary><b>Weitere Einstellungen</b></summary>
@@ -218,9 +218,12 @@ docker compose up -d
 npm ci
 npm run dev                  # Entwicklung mit Hot-Reload
 npm run build && npm start   # Produktionsbuild
+npm run lint && npm test     # ESLint und Vitest (laufen auch beim Docker-Build mit)
 ```
 
-**Release:** Version in `package.json` anheben, Abschnitt in `CHANGELOG.md` ergänzen, committen und einen Tag pushen (`git tag v0.4.7 && git push origin v0.4.7`). GitHub Actions baut dann das Image für amd64/arm64, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release mit dem Text aus dem CHANGELOG an. Dependabot hält npm-Pakete, Docker-Basis-Image und Actions aktuell.
+Ohne lokales Node: `scripts/test.sh` (Lint + Tests im Docker), `e2e/run.sh` (Puppeteer-Tests gegen einen Wegwerf-Container, siehe [e2e/README.md](e2e/README.md)). GitHub Actions prüft jeden Push und Pull Request (`.github/workflows/check.yml`).
+
+**Release:** Version in `package.json` anheben, Abschnitt in `CHANGELOG.md` ergänzen, committen und einen Tag pushen (`git tag v0.4.8 && git push origin v0.4.8`). GitHub Actions baut dann das Image für amd64/arm64, veröffentlicht es unter `ghcr.io/seals187/classroom` und legt das GitHub-Release mit dem Text aus dem CHANGELOG an. Dependabot hält npm-Pakete, Docker-Basis-Image und Actions aktuell.
 
 </details>
 

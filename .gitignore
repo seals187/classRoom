@@ -36,3 +36,6 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# E2E-Screenshots
+e2e/out/

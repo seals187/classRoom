@@ -312,7 +312,7 @@ function topBlock(root) {
 
 /** @param {Node} n */
 const isBlank = (n) =>
-	!(n.textContent ?? '').replace(/ /g, ' ').trim() &&
+	!(n.textContent ?? '').replace(/\xa0/g, ' ').trim() &&
 	!(n.nodeType === Node.ELEMENT_NODE && /** @type {Element} */ (n).querySelector('img, table, hr, .video, .badge'));
 
 /**

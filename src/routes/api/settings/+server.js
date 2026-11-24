@@ -1,21 +1,20 @@
 import { json } from '@sveltejs/kit';
 import { requireTeacher } from '#lib/server/auth.js';
-import { chooseClass } from '#lib/server/classes.js';
-import { getSettings, resetSettings, saveSettings, writeSettings } from '#lib/server/db.js';
+import { getSettings } from '#lib/server/db.js';
+import { chooseView, saveLesson, stopLesson } from '#lib/server/lesson.js';
 
-// Stunde (Zeiten, Raum, Aufräumen) speichern; `classId` wählt die aktive Klasse (auch ohne Stunde),
-// `selfAll` zeigt im Selbstlernen alle eigenen Klassen. Nur `classId`/`selfAll` → die Stunde bleibt unverändert.
+// Für ältere Clients und Skripte – die App nutzt /api/lesson (Stunde) und /api/class (Klasse).
+// PUT { classId?, selfAll?, startTime?, returnTime?, … }: leere Zeiten beenden die Stunde.
 export async function PUT({ locals, request }) {
-	const user = requireTeacher(locals);
+	requireTeacher(locals);
 	const { classId, selfAll, ...input } = await request.json();
-	if (classId !== undefined) chooseClass(user, classId);
-	if (selfAll !== undefined) writeSettings(locals.owner, { selfAll: selfAll === true ? '1' : '0' });
+	if (selfAll === true) chooseView(locals, { all: true });
+	else if (classId !== undefined) chooseView(locals, { classId });
 	if (Object.keys(input).length === 0) return json(getSettings(locals.owner));
-	return json(saveSettings(locals.owner, input));
+	if (!input.startTime && !input.returnTime) return json(stopLesson(locals));
+	return json(saveLesson(locals, input));
 }
 
-// Gespeicherte Werte verwerfen → wieder die Standardwerte aus der .env.
 export function DELETE({ locals }) {
-	requireTeacher(locals);
-	return json(resetSettings(locals.owner));
+	return json(stopLesson(locals));
 }

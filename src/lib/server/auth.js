@@ -2,7 +2,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { error } from '@sveltejs/kit';
 import { getConfig } from './config.js';
 import { deleteFilesIfUnused, teacherImages } from './assignment.js';
-import { assertUsernameFree, canSeeStudent, claimOrphans, getDb, getGoalOwner, normalizeUsername } from './db.js';
+import { assertUsernameFree, canSeeStudent, getDb, normalizeUsername } from './db.js';
+import { claimOrphans } from './migrations.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { activeClass, selfAllClasses, syncVisibility } from './classes.js';
 
@@ -299,17 +300,6 @@ export function requireStudentAccess(locals, studentId) {
 	error(403, 'Du darfst nur deine eigenen Ziele bearbeiten');
 }
 
-/**
- * Ziele gehören einer Lehrkraft: bearbeiten nur in deren Klasse (Lehrkraft selbst bzw. ihr Schüler).
- * @param {App.Locals} locals
- * @param {number} goalId
- */
-export function requireGoalAccess(locals, goalId) {
-	const goal = getGoalOwner(goalId);
-	if (goal.teacherId !== locals.owner) error(404, 'Ziel nicht gefunden');
-	requireStudentAccess(locals, goal.studentId);
-}
-
 // --- Lehrkräfte ---
 
 /** @param {unknown} value */
@@ -457,4 +447,19 @@ export function ensureEnvTeacher() {
 			console.log(`[classRoom] Passwort von „${username}“ auf den Wert aus der .env gesetzt.`);
 		}
 	}
+}
+
+/**
+ * Lehrkraft ändern: das eigene Passwort darf jede Lehrkraft, alles andere (fremdes Passwort, Name, Admin) nur der Admin.
+ * @param {Pick<App.Locals, 'user' | 'owner'>} actor
+ * @param {number} id
+ * @param {{ password?: unknown, isAdmin?: unknown, username?: unknown }} input
+ */
+export function updateTeacher(actor, id, { password, isAdmin, username }) {
+	const user = requireTeacher(actor);
+	if (id !== user.id || isAdmin !== undefined || username !== undefined) requireAdmin(actor);
+	if (password === undefined && isAdmin === undefined && username === undefined) error(400, 'Nichts zu ändern');
+	if (password !== undefined) setTeacherPassword(id, { password });
+	if (username !== undefined) renameTeacher(id, username);
+	if (isAdmin !== undefined) setTeacherRights(id, { isAdmin }, user.id);
 }

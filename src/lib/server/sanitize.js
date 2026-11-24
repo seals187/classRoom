@@ -1,4 +1,5 @@
 import sanitizeHtml from 'sanitize-html';
+import { STEP_KEY } from './assignment-content.js';
 
 const COLOR = [/^#[0-9a-f]{3,8}$/i, /^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*[\d.]+\s*)?\)$/i];
 
@@ -11,6 +12,8 @@ const OPTIONS = {
 	allowedAttributes: {
 		a: ['href', 'target', 'rel'],
 		div: ['data-yt'],
+		// Fester Schlüssel eines Schritts (siehe assignment-content.js).
+		li: ['data-step'],
 		'*': ['style']
 	},
 	// Listenarten, Kästen, Video, Badges und Zellfarben aus der Werkzeugleiste (siehe #lib/editor.js).
@@ -42,6 +45,11 @@ const OPTIONS = {
 			if (!('data-yt' in attribs)) return { tagName: 'div', attribs };
 			const { 'data-yt': id, ...rest } = attribs;
 			return { tagName: 'div', attribs: /^[\w-]{11}$/.test(id) ? { ...rest, 'data-yt': id } : rest };
+		},
+		// Schritt-Schlüssel nur in der erwarteten Form.
+		li: (_, attribs) => {
+			const { 'data-step': key, ...rest } = attribs;
+			return { tagName: 'li', attribs: key !== undefined && STEP_KEY.test(key) ? { ...rest, 'data-step': key } : rest };
 		}
 	}
 };

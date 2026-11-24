@@ -3,7 +3,7 @@
 	import { autoRefresh } from '#lib/refresh.js';
 	import { page } from '$app/state';
 	import { clock } from '#lib/clock.svelte.js';
-	import { lessonEnded, lessonSpan } from '#lib/time.js';
+	import { lessonState } from '#lib/lesson.js';
 	import { ui } from '#lib/ui.svelte.js';
 	import StudentTile from './StudentTile.svelte';
 
@@ -30,9 +30,8 @@
 		const s = page.data.settings;
 		const now = clock.now;
 		if (!s?.returnTime || !now) return null;
-		const span = lessonSpan(s.startTime, s.returnTime, now);
-		if (!span.end || lessonEnded(span, now) || (span.start && span.start > now)) return null;
-		return span.start?.getTime() ?? now.getTime();
+		const lesson = lessonState(s, { warnMinutes: 0, goMinutes: 0 }, now);
+		return lesson.running ? (lesson.start?.getTime() ?? now.getTime()) : null;
 	});
 	const GAP = 10;
 	// Spalten: mindestens 180px breit, auf schmalen Bildschirmen immer 2.

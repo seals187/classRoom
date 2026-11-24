@@ -7,19 +7,13 @@ import {
 	TEACHER_COOKIE,
 	validateSession
 } from '#lib/server/auth.js';
-import { claimOrphans } from '#lib/server/db.js';
-import { migrateClasses } from '#lib/server/classes.js';
-import { migrateAssignments } from '#lib/server/assignment.js';
+import { runMigrations } from '#lib/server/migrations.js';
 import { getConfig } from '#lib/server/config.js';
 
 export function init() {
 	ensureEnvTeacher();
-	// Nach einem Update: bestehende Schüler, Ziele, Auftrag usw. gehören dem Admin.
-	claimOrphans();
-	// Seit den Klassen: jede Lehrkraft bekommt einmalig eine Klasse mit ihren bisherigen Schülern.
-	migrateClasses();
-	// Seit mehreren Aufträgen: der bisherige wird der erste – aktiv, für die aktive Klasse, gleicher Link.
-	migrateAssignments();
+	// Datenumstellungen nach einem Update – Reihenfolge in migrations.js.
+	runMigrations();
 }
 
 const PUBLIC_PATHS = ['/login'];

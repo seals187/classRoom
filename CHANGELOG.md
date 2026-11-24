@@ -2,6 +2,19 @@
 
 Alle wichtigen Änderungen an classRoom. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); das Docker-Image gibt es jeweils unter `ghcr.io/seals187/classroom:<version>`.
 
+## [0.4.8] – 2026-11-24
+
+### Geändert
+- **Fortschritt bleibt am Schritt:** Jeder Schritt eines Auftrags hat jetzt einen festen Schlüssel. Ziele, die mit „Als Stundenziele“ gesendet wurden, gehören zu ihrem Schritt – ändert man später den Text des Schritts (oder formuliert das Ziel im Fenster um), bleibt der Fortschritt ✓ x/y daran stehen. Bisher verschwand er schon bei einem geänderten Wort
+- Von Hand getippte Schritte („- “, „1. “) werden beim Speichern zu einer Schritt-Liste – auch im Editor erscheinen sie danach als nummerierte Schritte
+- Beim Update bekommen bestehende Aufträge und ihre Ziele die Schlüssel einmalig (Zuordnung über den Text)
+- Kopfband, Menü, Zielkacheln und die geteilte Seite rechnen den Zustand der Stunde gleich: Eine Stunde mit nur einem Ende (z. B. `DEFAULT_RETURN_TIME`) gilt nun auch im Menü als laufend
+
+### Intern
+- Lint (ESLint) und Tests (Vitest) laufen beim Bauen des Docker-Images und bei jedem Push und Pull Request (GitHub Actions); E2E-Tests mit Puppeteer liegen in `e2e/`
+- Neue API für die Stunde: `PUT`/`DELETE /api/lesson`, Klassenwahl über `PUT /api/class`; `PUT /api/settings` bleibt für ältere Skripte
+- Rechte prüfen die Module selbst (Ziele, Schüler, Aufträge, Lehrkräfte); Datenumstellungen laufen in fester Reihenfolge (`migrations.js`)
+
 ## [0.4.7] – 2026-11-05
 
 ### Neu
@@ -269,6 +282,7 @@ Erste Version.
 - Konfiguration über `.env`, Installation per Docker Compose
 - Dependabot und Release-Workflow (Docker-Image für amd64/arm64 nach ghcr.io)
 
+[0.4.8]: https://github.com/seals187/classRoom/compare/v0.4.7...v0.4.8
 [0.4.7]: https://github.com/seals187/classRoom/compare/v0.4.6...v0.4.7
 [0.4.6]: https://github.com/seals187/classRoom/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/seals187/classRoom/compare/v0.4.4...v0.4.5

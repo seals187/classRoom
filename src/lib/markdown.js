@@ -60,6 +60,8 @@ function inline(raw) {
 	});
 	s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 	s = s.replace(/(^|[^*])\*(?!\s)([^*]+?)\*/g, '$1<em>$2</em>');
+	// Platzhalter mit NUL-Zeichen kommen in getipptem Text nicht vor (siehe oben).
+	// eslint-disable-next-line no-control-regex
 	return s.replace(/\u0000(\d+)\u0000/g, (_, i) => tokens[Number(i)]);
 }
 

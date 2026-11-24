@@ -1,6 +1,7 @@
 import { listTeachers, manageScope, requireTeacher } from '#lib/server/auth.js';
 import { listClasses, studentClassIds } from '#lib/server/classes.js';
-import { goalStats, listStudents, listUsernames } from '#lib/server/db.js';
+import { listStudents, listUsernames } from '#lib/server/db.js';
+import { goalStats } from '#lib/server/goals.js';
 
 // Verwaltung mit den Reitern Klassen · Schüler · Lehrkräfte. Lehrkräfte sehen ihre Klassen und deren
 // Schüler, der Admin alles. Unter „Lehrkräfte“ sieht man ohne Admin-Recht nur sich selbst.

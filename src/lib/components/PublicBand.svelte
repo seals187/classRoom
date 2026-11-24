@@ -1,6 +1,7 @@
 <script>
 	import { clock } from '#lib/clock.svelte.js';
-	import { lessonEnded, lessonSpan, pad } from '#lib/time.js';
+	import { pad } from '#lib/time.js';
+	import { bigRemaining, lessonState } from '#lib/lesson.js';
 	import logo from '#lib/assets/logo.svg';
 	import Icon from './Icon.svelte';
 
@@ -12,28 +13,21 @@
 	let { lesson, phase = $bindable('none') } = $props();
 
 	const now = $derived(clock.now ?? new Date());
-	const span = $derived(lessonSpan(lesson.startTime, lesson.returnTime, now));
-	const running = $derived(!!lesson.returnTime && !!span.end && !lessonEnded(span, now));
-	const remaining = $derived(span.end ? span.end.getTime() - now.getTime() : 0);
-	const minutes = $derived(Math.max(0, Math.ceil(remaining / 60000)));
-	const before = $derived(!!span.start && now < span.start);
-	const total = $derived(span.start && span.end ? span.end.getTime() - span.start.getTime() : 0);
-	const progress = $derived(before || !total ? 0 : Math.min(1, Math.max(0, (now.getTime() - (span.start?.getTime() ?? 0)) / total)));
+	// Zustand der Stunde – dieselbe Rechnung wie im Kopfband (#lib/lesson.js).
+	const current = $derived(lessonState(lesson, lesson, now));
+	const remaining = $derived(current.remaining ?? 0);
+	const before = $derived(current.phase === 'before');
+	const progress = $derived(current.progress);
 
+	// Das Band kennt drei Stufen: arbeiten (auch vor dem Beginn), aufräumen, losgehen (auch „Zeit um“).
 	$effect(() => {
-		phase = !running
-			? 'none'
-			: remaining <= lesson.goMinutes * 60000
-				? 'go'
-				: remaining <= lesson.warnMinutes * 60000
-					? 'soon'
-					: 'work';
+		phase = current.phase === 'none' ? 'none' : current.phase === 'over' || current.phase === 'go' ? 'go' : current.phase === 'soon' ? 'soon' : 'work';
 	});
 
 	/** @param {Date} d */
 	const hhmm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 	const end = $derived(lesson.returnTime.slice(0, 5));
-	const big = $derived(minutes < 60 ? { value: String(minutes), unit: 'min' } : { value: `${Math.floor(minutes / 60)}:${pad(minutes % 60)}`, unit: 'h' });
+	const big = $derived(bigRemaining(current.remaining));
 </script>
 
 {#snippet brand()}

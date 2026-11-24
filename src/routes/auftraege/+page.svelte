@@ -59,7 +59,7 @@
 
 	/** @param {import('#lib/server/assignment.js').Assignment} a */
 	function summary(a) {
-		const steps = a.steps;
+		const steps = a.steps.length;
 		const parts = [`${steps} ${steps === 1 ? 'Schritt' : 'Schritte'}`];
 		if (a.images.length) parts.push(`${a.images.length} ${a.images.length === 1 ? 'Bild' : 'Bilder'}`);
 		return parts.join(' · ');

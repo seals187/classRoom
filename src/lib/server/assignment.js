@@ -3,6 +3,8 @@ import { renderMarkdown } from '#lib/markdown.js';
 import { activeClass, listClasses } from './classes.js';
 import { getConfig } from './config.js';
 import { getDb, readSettings, writeSettings } from './db.js';
+import { prepareContent } from './assignment-content.js';
+import { requireTeacher } from './auth.js';
 import { cleanHtml } from './sanitize.js';
 
 // Aufträge: beliebig viele je Lehrkraft, jeder zu keiner, einer oder mehreren Klassen. Genau einer ist aktiv
@@ -12,17 +14,27 @@ import { cleanHtml } from './sanitize.js';
  * `html` ist serverseitig bereinigt und darf direkt mit {@html} ausgegeben werden. `id` null = noch keiner.
  * @typedef {{
  *   id: number | null, title: string, html: string, images: number[], updatedAt: string | null,
- *   classIds: number[], date: string | null, archived: boolean, draft: boolean, active: boolean, steps: number
+ *   classIds: number[], date: string | null, archived: boolean, draft: boolean, active: boolean,
+ *   steps: import('./assignment-content.js').Step[]
  * }} Assignment
  */
 
-/** @typedef {{ id: number, isAdmin: boolean }} Viewer */
+/** Aufrufer: angemeldete Lehrkraft – jede ändernde Funktion prüft das selbst. @typedef {Pick<App.Locals, 'user' | 'owner'>} Actor */
 
 const MAX_IMAGES = 30;
 const ACTIVE_KEY = 'assignmentId';
 
 /** @type {Assignment} */
-const EMPTY = { id: null, title: '', html: '', images: [], updatedAt: null, classIds: [], date: null, archived: false, draft: true, active: false, steps: 0 };
+const EMPTY = { id: null, title: '', html: '', images: [], updatedAt: null, classIds: [], date: null, archived: false, draft: true, active: false, steps: [] };
+
+/**
+ * Nur Lehrkräfte ändern Aufträge – und zwar ihre eigenen (`owner`); `viewer` bestimmt, welche Klassen sie wählen dürfen.
+ * @param {Actor} actor
+ */
+function teacher(actor) {
+	const viewer = requireTeacher(actor);
+	return { owner: actor.owner, viewer };
+}
 
 /** @param {string} json */
 function parseIds(json) {
@@ -66,59 +78,11 @@ function classesOf(ids) {
 	return map;
 }
 
-/** Zeilenanfang eines von Hand getippten Schritts – wie in steps.js. */
-const MARKER = /^\s*(?:[-–—•*]|\d+[.)])\s+/;
-
-/**
- * Zahl der Schritte für die Übersicht: Punkte nummerierter Listen und Zeilen mit „- “ / „1. “ am Anfang
- * (so zeigt sie die Anzeige als Schritte, siehe dashesToSteps).
- * @param {string} html
- */
-function stepCount(html) {
-	// Schritte = Punkte einer klassenlosen <ol> ganz oben (andere Listenarten und Unterlisten zählen nicht).
-	let count = 0;
-	let rest = '';
-	let last = 0;
-	/** @type {{ steps: boolean }[]} */
-	const stack = [];
-	let stepsStart = -1;
-	for (const m of html.matchAll(/<(\/?)(ol|ul|li)\b([^>]*)>/gi)) {
-		const [tag, closing, name, attrs] = m;
-		const at = /** @type {number} */ (m.index);
-		const lower = name.toLowerCase();
-		if (lower === 'li') {
-			if (!closing && stack.length === 1 && stack[0].steps) count++;
-			continue;
-		}
-		if (!closing) {
-			const steps = stack.length === 0 && lower === 'ol' && !/\bclass\s*=/i.test(attrs);
-			if (steps) {
-				rest += html.slice(last, at);
-				stepsStart = at;
-			}
-			stack.push({ steps });
-		} else if (stack.length) {
-			const top = /** @type {{ steps: boolean }} */ (stack.pop());
-			if (top.steps && stepsStart >= 0) {
-				rest += '<p>';
-				last = at + tag.length;
-				stepsStart = -1;
-			}
-		}
-	}
-	rest += stepsStart >= 0 ? '' : html.slice(last);
-	for (const line of rest.split(/<br\s*\/?>|<\/?(?:p|div|ul|ol|li|h3|h4|table|tr|th|td)[^>]*>/i)) {
-		const text = line.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ');
-		if (MARKER.test(text) && text.replace(MARKER, '').trim()) count++;
-	}
-	return count;
-}
-
 /** @param {Row} row @param {number[]} classIds @param {number | null} activeId @returns {Assignment} */
 function toAssignment(row, classIds, activeId) {
 	// Aufträge von vor dem Editor sind noch Markdown. Auch gespeichertes HTML erneut bereinigen –
 	// so verschwinden z. B. weiße Schriftfarben aus älteren Aufträgen.
-	const html = cleanHtml(row.format === 'html' ? row.body : renderMarkdown(row.body));
+	const { html, steps } = prepareContent(cleanHtml(row.format === 'html' ? row.body : renderMarkdown(row.body)));
 	return {
 		id: row.id,
 		title: row.title,
@@ -130,7 +94,7 @@ function toAssignment(row, classIds, activeId) {
 		archived: row.archived === 1,
 		draft: classIds.length === 0 || row.shownAt === null,
 		active: row.id === activeId,
-		steps: stepCount(html)
+		steps
 	};
 }
 
@@ -186,7 +150,8 @@ function contentOf(input) {
 	const title = typeof input.title === 'string' ? input.title.trim() : '';
 	if (title.length > 120) error(400, 'Titel ist zu lang (max. 120 Zeichen)');
 	if (typeof input.html === 'string' && input.html.length > 200_000) error(400, 'Text ist zu lang');
-	const body = typeof input.html === 'string' ? cleanHtml(input.html) : '';
+	// Schritte bekommen hier ihren festen Schlüssel (data-step), siehe assignment-content.js.
+	const body = typeof input.html === 'string' ? prepareContent(cleanHtml(input.html)).html : '';
 	if (body.length > 50_000) error(400, 'Text ist zu lang');
 	const exists = getDb().prepare('SELECT 1 FROM files WHERE id = ?');
 	const wanted = Array.isArray(input.images) ? input.images.filter(Number.isInteger) : [];
@@ -195,7 +160,7 @@ function contentOf(input) {
 	return { title, body, images: JSON.stringify(images) };
 }
 
-/** Nur Klassen, die die Lehrkraft sieht. @param {Viewer} viewer @param {unknown} value */
+/** Nur Klassen, die die Lehrkraft sieht. @param {import("./auth.js").User} viewer @param {unknown} value */
 function classIdsOf(viewer, value) {
 	if (!Array.isArray(value)) error(400, 'Ungültige Klassen');
 	const visible = new Set(listClasses(viewer, { archived: true }).map((c) => c.id));
@@ -223,11 +188,11 @@ function setClasses(id, classIds) {
 
 /**
  * Neuer Auftrag (nicht aktiv, Entwurf bis zum ersten „Zeigen“).
- * @param {number} owner
- * @param {Viewer} viewer
+ * @param {Actor} actor
  * @param {Record<string, unknown>} input title, html, images, classIds?, date?
  */
-export function createAssignment(owner, viewer, input) {
+export function createAssignment(actor, input) {
+	const { owner, viewer } = teacher(actor);
 	const { title, body, images } = contentOf(input);
 	const classIds = input.classIds === undefined ? [] : classIdsOf(viewer, input.classIds);
 	const date = input.date === undefined ? null : dateOf(input.date);
@@ -251,12 +216,12 @@ export function createAssignment(owner, viewer, input) {
 /**
  * Auftrag ändern – nur die mitgeschickten Teile: Inhalt (title/html/images), classIds, date, archived.
  * Archivieren beendet „aktiv“ (der Auftrag verschwindet aus Menü und „Alle“).
- * @param {number} owner
- * @param {Viewer} viewer
+ * @param {Actor} actor
  * @param {number} id
  * @param {Record<string, unknown>} input
  */
-export function updateAssignment(owner, viewer, id, input) {
+export function updateAssignment(actor, id, input) {
+	const { owner, viewer } = teacher(actor);
 	const before = getAssignment(owner, id);
 	const db = getDb();
 	const content = 'title' in input || 'html' in input || 'images' in input ? contentOf(input) : null;
@@ -281,8 +246,9 @@ export function updateAssignment(owner, viewer, id, input) {
 	return getAssignment(owner, id);
 }
 
-/** Auftrag samt seiner Bilder (sofern sonst unbenutzt) löschen. @param {number} owner @param {number} id */
-export function deleteAssignment(owner, id) {
+/** Auftrag samt seiner Bilder (sofern sonst unbenutzt) löschen. @param {Actor} actor @param {number} id */
+export function deleteAssignment(actor, id) {
+	const { owner } = teacher(actor);
 	const { images } = getAssignment(owner, id);
 	const db = getDb();
 	db.transaction(() => {
@@ -291,8 +257,9 @@ export function deleteAssignment(owner, id) {
 	})();
 }
 
-/** „Zeigen“: aktiv machen (auch aus dem Archiv). @param {number} owner @param {number} id */
-export function showAssignment(owner, id) {
+/** „Zeigen“: aktiv machen (auch aus dem Archiv). @param {Actor} actor @param {number} id */
+export function showAssignment(actor, id) {
+	const { owner } = teacher(actor);
 	getAssignment(owner, id);
 	getDb().prepare('UPDATE assignment_items SET shown_at = ?, archived = 0 WHERE id = ?').run(Date.now(), id);
 	writeSettings(owner, { [ACTIVE_KEY]: String(id) });
@@ -301,10 +268,11 @@ export function showAssignment(owner, id) {
 
 /**
  * Kopie mit denselben Klassen, Datum und Bildern (geteilt, nicht verdoppelt) – nicht geteilt, als Entwurf.
- * @param {number} owner
+ * @param {Actor} actor
  * @param {number} id
  */
-export function copyAssignment(owner, id) {
+export function copyAssignment(actor, id) {
+	const { owner } = teacher(actor);
 	getAssignment(owner, id);
 	const db = getDb();
 	const copy = db.transaction(() => {
@@ -330,22 +298,23 @@ export function copyAssignment(owner, id) {
 /**
  * PUT /api/assignment (ältere Clients, Skripte): den aktiven Auftrag ändern bzw. ohne einen neuen für die
  * aktive Klasse anlegen und zeigen.
- * @param {number} owner
- * @param {Viewer} viewer
+ * @param {Actor} actor
  * @param {Record<string, unknown>} input
  */
-export function saveActiveAssignment(owner, viewer, input) {
+export function saveActiveAssignment(actor, input) {
+	const { owner } = teacher(actor);
 	const id = activeAssignmentId(owner);
-	if (id) return updateAssignment(owner, viewer, id, { title: input.title, html: input.html, images: input.images });
+	if (id) return updateAssignment(actor, id, { title: input.title, html: input.html, images: input.images });
 	const klass = activeClass(owner);
-	const created = createAssignment(owner, viewer, { ...input, classIds: klass ? [klass.id] : [] });
-	return showAssignment(owner, /** @type {number} */ (created.id));
+	const created = createAssignment(actor, { ...input, classIds: klass ? [klass.id] : [] });
+	return showAssignment(actor, /** @type {number} */ (created.id));
 }
 
-/** @param {number} owner */
-export function deleteActiveAssignment(owner) {
+/** @param {Actor} actor */
+export function deleteActiveAssignment(actor) {
+	const { owner } = teacher(actor);
 	const id = activeAssignmentId(owner);
-	if (id) deleteAssignment(owner, id);
+	if (id) deleteAssignment(actor, id);
 }
 
 /** Lehrkräfte zum Weitergeben. @returns {{ id: number, username: string }[]} */
@@ -358,12 +327,13 @@ export function listTeachers() {
 /**
  * Auftrag an eine andere Lehrkraft kopieren oder übertragen (dann ist er bei der ersten weg). Er kommt dort
  * ohne Klassen an (Entwurf), ein öffentlicher Link (QR-Code) geht nicht mit. Bilder werden geteilt.
- * @param {number} owner
+ * @param {Actor} actor
  * @param {number} id
  * @param {number} to
  * @param {unknown} mode 'copy' | 'move'
  */
-export function transferAssignment(owner, id, to, mode) {
+export function transferAssignment(actor, id, to, mode) {
+	const { owner } = teacher(actor);
 	if (mode !== 'copy' && mode !== 'move') error(400, 'Ungültige Art');
 	if (owner === to) error(400, 'Bitte eine andere Lehrkraft wählen');
 	const db = getDb();
@@ -411,6 +381,35 @@ export function migrateAssignments() {
 		}
 		db.prepare('DELETE FROM assignments').run();
 		db.prepare("INSERT INTO settings (key, value) VALUES ('migrated.assignments', '1')").run();
+	})();
+}
+
+/**
+ * Einmalig beim Update auf feste Schritt-Schlüssel: Jeder Auftrag wird mit Schlüsseln gespeichert (ältere
+ * Markdown-Aufträge dabei als HTML), und bestehende Ziele aus Schritten bekommen den Schlüssel ihres Schritts –
+ * erkannt am gleichen Text, zuerst im aktiven Auftrag, dann in den neueren.
+ */
+export function migrateStepKeys() {
+	const db = getDb();
+	if (db.prepare("SELECT 1 FROM settings WHERE key = 'migrated.stepKeys'").get()) return;
+	const rows = /** @type {Row[]} */ (db.prepare(`SELECT ${COLUMNS} FROM assignment_items ORDER BY id DESC`).all());
+	const save = db.prepare("UPDATE assignment_items SET body = ?, format = 'html' WHERE id = ?");
+	const link = db.prepare('UPDATE goals SET step_key = ? WHERE teacher_id = ? AND step_key IS NULL AND text = ?');
+	db.transaction(() => {
+		/** @type {Map<number, { active: boolean, steps: import('./assignment-content.js').Step[] }[]>} */
+		const byTeacher = new Map();
+		for (const row of rows) {
+			const { html, steps } = prepareContent(cleanHtml(row.format === 'html' ? row.body : renderMarkdown(row.body)));
+			if (html !== row.body || row.format !== 'html') save.run(html, row.id);
+			const list = byTeacher.get(row.teacherId) ?? [];
+			list.push({ active: row.id === activeAssignmentId(row.teacherId), steps });
+			byTeacher.set(row.teacherId, list);
+		}
+		for (const [teacherId, list] of byTeacher) {
+			list.sort((a, b) => Number(b.active) - Number(a.active));
+			for (const { steps } of list) for (const step of steps) link.run(step.key, teacherId, step.text);
+		}
+		db.prepare("INSERT INTO settings (key, value) VALUES ('migrated.stepKeys', '1')").run();
 	})();
 }
 
